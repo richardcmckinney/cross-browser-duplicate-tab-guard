@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Duplicate tab detected</title>
+  <link rel="stylesheet" href="chooser.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="card" role="alertdialog" aria-labelledby="title" aria-describedby="description">
+      <p class="eyebrow">Duplicate tab detected</p>
+      <h1 id="title">This exact URL is already open</h1>
+      <div id="banner" class="existing-banner" style="display: none;">
+        <div class="banner-header">Pre-existing tab location</div>
+        <div id="badge-list" class="badge-list"></div>
+        <p id="banner-summary" class="banner-summary"></p>
+      </div>
+      <p id="description" class="description">Choose which browser should retain the single live copy. Every other exact-URL copy will be closed.</p>
+      <div id="url" class="url"></div>
+      <label for="choice">Browser to retain</label>
+      <select id="choice">
+        <option value="current">Current browser — this tab</option>
+        <option value="brave">Brave</option>
+        <option value="chrome">Chrome</option>
+        <option value="chromium">Chromium</option>
+      </select>
+      <div id="meta" class="meta"></div>
+      <p id="status" class="status" aria-live="polite"></p>
+      <div class="actions">
+        <button id="confirm" type="button">Keep selected copy</button>
+      </div>
+    </section>
+  </main>
+  <script src="chooser.js"></script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Duplicate Tab Guard</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <div class="heading">
+      <div>
+        <p class="eyebrow">Cross-browser</p>
+        <h1>Duplicate Tab Guard</h1>
+      </div>
+      <span id="connection" class="pill">Checking…</span>
+    </div>
+
+    <dl>
+      <div><dt>Guard</dt><dd id="guardStatus">—</dd></div>
+      <div><dt>Browser</dt><dd id="browser">—</dd></div>
+      <div><dt>Incognito / Private</dt><dd id="incognito">—</dd></div>
+      <div><dt>File URLs</dt><dd id="files">—</dd></div>
+      <div><dt>Exceptions</dt><dd id="exceptionCount">—</dd></div>
+      <div><dt>Pending alerts</dt><dd id="pending">—</dd></div>
+    </dl>
+
+    <label for="browserOverride">Browser identity override</label>
+    <select id="browserOverride">
+      <option value="auto">Automatic</option>
+      <option value="brave">Brave</option>
+      <option value="chrome">Chrome</option>
+      <option value="chromium">Chromium</option>
+    </select>
+
+    <details id="exceptionsPanel" class="panel" open>
+      <summary>
+        <span>Exceptions &amp; behavior</span>
+        <span id="summaryCount" class="summary-count">0</span>
+      </summary>
+      <div class="panel-body">
+        <div class="guard-row">
+          <label class="switch-row" for="guardEnabled">
+            <span>
+              <strong>Duplicate guard enabled</strong>
+              <small>Disable without removing any rules.</small>
+            </span>
+            <input id="guardEnabled" type="checkbox" role="switch">
+          </label>
+          <div class="pause-row">
+            <select id="pauseDuration" aria-label="Pause duration">
+              <option value="15">15 minutes</option>
+              <option value="60" selected>1 hour</option>
+              <option value="1440">24 hours</option>
+            </select>
+            <button id="pauseGuard" type="button" class="secondary compact">Pause</button>
+            <button id="resumeGuard" type="button" class="secondary compact" hidden>Resume</button>
+          </div>
+          <p id="guardMessage" class="microcopy"></p>
+        </div>
+
+        <div class="current-card">
+          <p class="mini-label">Current page</p>
+          <p id="currentUrl" class="current-url">Reading active tab…</p>
+          <div class="quick-actions">
+            <button id="addExact" type="button" class="secondary">Exclude exact URL</button>
+            <button id="addHost" type="button" class="secondary">Exclude hostname</button>
+          </div>
+        </div>
+
+        <details id="customRuleDetails" class="subpanel">
+          <summary id="customRuleSummary">Add a custom rule</summary>
+          <form id="ruleForm">
+            <div class="field-grid">
+              <div>
+                <label for="ruleType">Match type</label>
+                <select id="ruleType">
+                  <option value="exact">Exact URL</option>
+                  <option value="host">Hostname</option>
+                  <option value="domain">Domain + subdomains</option>
+                  <option value="wildcard">Wildcard URL</option>
+                  <option value="regex">Regular expression</option>
+                </select>
+              </div>
+              <div>
+                <label for="ruleBrowser">Browser scope</label>
+                <select id="ruleBrowser">
+                  <option value="all">All browsers</option>
+                  <option value="brave">Brave only</option>
+                  <option value="chrome">Chrome only</option>
+                  <option value="chromium">Chromium only</option>
+                </select>
+              </div>
+            </div>
+
+            <label for="rulePattern">Pattern</label>
+            <div class="input-action">
+              <input id="rulePattern" type="text" autocomplete="off" spellcheck="false" placeholder="https://example.com/path">
+              <button id="useCurrent" type="button" class="secondary compact">Use current</button>
+            </div>
+
+            <div class="field-grid">
+              <div>
+                <label for="ruleContext">Window scope</label>
+                <select id="ruleContext">
+                  <option value="all">Regular + private</option>
+                  <option value="regular">Regular only</option>
+                  <option value="incognito">Private / incognito only</option>
+                </select>
+              </div>
+              <div>
+                <label for="ruleNote">Description <span class="optional">optional</span></label>
+                <input id="ruleNote" type="text" maxlength="160" placeholder="Why this is excluded">
+              </div>
+            </div>
+
+            <p class="microcopy">Wildcard rules use <code>*</code> for any text and <code>?</code> for one character. Regex rules may use JavaScript literal form such as <code>/pattern/i</code>.</p>
+            <div class="form-actions">
+              <button id="cancelEdit" type="button" class="secondary" hidden>Cancel</button>
+              <button id="saveRule" type="submit">Add exception</button>
+            </div>
+          </form>
+        </details>
+
+        <div class="rules-heading">
+          <span>Saved rules</span>
+          <span id="rulesCount">0</span>
+        </div>
+        <p id="rulesEmpty" class="empty-state">No exceptions yet. Use the current-page buttons or add a custom rule.</p>
+        <div id="rulesList" class="rules-list"></div>
+
+        <details class="subpanel transfer-panel">
+          <summary>Import / export rules</summary>
+          <p class="microcopy">Copy the same rule set into Brave, Chrome, or Chromium to keep browser profiles aligned.</p>
+          <div class="quick-actions">
+            <button id="copyRules" type="button" class="secondary">Copy JSON</button>
+            <button id="showImport" type="button" class="secondary">Import JSON</button>
+          </div>
+          <div id="importArea" hidden>
+            <label for="importText">Paste exported JSON</label>
+            <textarea id="importText" rows="5" spellcheck="false"></textarea>
+            <div class="input-action import-actions">
+              <select id="importMode" aria-label="Import mode">
+                <option value="merge">Merge with existing</option>
+                <option value="replace">Replace existing</option>
+              </select>
+              <button id="applyImport" type="button">Apply import</button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <p id="note" class="note" aria-live="polite"></p>
+    <div class="actions">
+      <button id="details" type="button" class="secondary">Permissions</button>
+      <button id="rescan" type="button">Rescan tabs</button>
+    </div>
+  </main>
+  <script src="exceptions.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
