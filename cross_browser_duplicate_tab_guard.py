@@ -35,6 +35,7 @@ import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Union
@@ -114,8 +115,13 @@ def log_path() -> Path:
 def runtime_dir() -> Path:
     if supported_platform() == "darwin":
         root = home_dir() / "Library" / "Application Support" / "CrossBrowserDuplicateTabGuard" / "run"
-        ensure_private_dir(root)
-        return root
+        try:
+            ensure_private_dir(root)
+            return root
+        except OSError:
+            fallback = Path(f"/tmp/cbdtg-{os.getuid()}")
+            ensure_private_dir(fallback)
+            return fallback
     if supported_platform() == "linux" and os.environ.get("XDG_RUNTIME_DIR"):
         root = Path(os.environ["XDG_RUNTIME_DIR"])
         try:
@@ -125,7 +131,7 @@ def runtime_dir() -> Path:
                 return target
         except OSError:
             pass
-    fallback = Path(tempfile.gettempdir()) / f"cbdtg-{os.getuid()}"
+    fallback = Path(f"/tmp/cbdtg-{os.getuid()}")
     ensure_private_dir(fallback)
     return fallback
 
@@ -213,6 +219,25 @@ def load_config(create: bool = False) -> dict[str, Any]:
 
 def render_extension_files(config: dict[str, Any]) -> dict[str, str]:
     rendered: dict[str, str] = {}
+    local_ext = Path(__file__).resolve().parent / "extension"
+    if local_ext.is_dir():
+        for root, dirs, files in os.walk(local_ext):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            for file in files:
+                if file.startswith(".") or file.endswith(("~", ".bak", ".tmp", ".png", ".jpg", ".jpeg", ".ico")):
+                    continue
+                p = Path(root) / file
+                rel = str(p.relative_to(local_ext))
+                try:
+                    text = p.read_text(encoding="utf-8")
+                    rendered[rel] = (
+                        text.replace("__AUTH_TOKEN__", str(config["token"]))
+                        .replace("__WS_PORT__", str(config["ws_port"]))
+                    )
+                except Exception:
+                    pass
+        if rendered:
+            return rendered
     for name, content in EXTENSION_FILES.items():
         rendered[name] = (
             content.replace("__AUTH_TOKEN__", str(config["token"]))
@@ -1634,6 +1659,17 @@ def install(open_pages: bool = False) -> int:
     atomic_write(installed_script_path(), current_source_bytes(), 0o755)
     for relative, content in render_extension_files(config).items():
         atomic_write(extension_dir() / relative, content, 0o644)
+    local_ext = Path(__file__).resolve().parent / "extension"
+    if local_ext.is_dir():
+        for root_dir, dirs, files in os.walk(local_ext):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            for file in files:
+                if file.endswith((".png", ".svg", ".ico", ".jpg")):
+                    src_file = Path(root_dir) / file
+                    rel = src_file.relative_to(local_ext)
+                    dest_file = extension_dir() / rel
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_file, dest_file)
     manifests = install_native_manifests()
     external_exts = install_external_extensions()
     autostart = install_autostart()
@@ -2158,6 +2194,64 @@ def self_test() -> int:
         print(f"  - {name}")
     return 0
 
+
+def pack_extension(output_dir: str = "dist") -> int:
+    """Package the extension for Chrome Web Store distribution."""
+    local_ext = Path(__file__).resolve().parent / "extension"
+    src_dir = local_ext if local_ext.is_dir() else extension_dir()
+
+    manifest_path = src_dir / "manifest.json"
+    if not manifest_path.exists():
+        raise GuardError(f"manifest.json not found in {src_dir}")
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise GuardError(f"Failed to parse manifest.json: {e}")
+
+    version = manifest.get("version", "0.0.0")
+    name = manifest.get("name", "extension")
+
+    if manifest.get("manifest_version") != 3:
+        raise GuardError("Chrome Web Store requires manifest_version 3")
+
+    icons = manifest.get("icons", {})
+    for req_size in ("16", "48", "128"):
+        icon_rel = icons.get(req_size)
+        if not icon_rel:
+            print(f"Warning: icon size {req_size} is not declared in manifest.json icons")
+        elif not (src_dir / icon_rel).exists():
+            raise GuardError(f"Icon file referenced in manifest does not exist: {src_dir / icon_rel}")
+
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    zip_name = f"cross-browser-duplicate-tab-guard-v{version}.zip"
+    zip_dest = out_path / zip_name
+
+    ignore_patterns = {".DS_Store", "Thumbs.db", "__pycache__", ".git", ".gitignore"}
+
+    file_count = 0
+    with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root_dir, dirs, files in os.walk(src_dir):
+            dirs[:] = [d for d in dirs if d not in ignore_patterns and not d.startswith((".", "_"))]
+            for file in sorted(files):
+                if file in ignore_patterns or file.endswith(("~", ".bak", ".tmp", ".swp")):
+                    continue
+                file_path = Path(root_dir) / file
+                arcname = file_path.relative_to(src_dir)
+                zf.write(file_path, arcname)
+                file_count += 1
+
+    size_bytes = zip_dest.stat().st_size
+    size_kb = size_bytes / 1024.0
+    print(f"Successfully packaged {name} v{version}:")
+    print(f"  Archive: {zip_dest}")
+    print(f"  Files:   {file_count}")
+    print(f"  Size:    {size_kb:.1f} KB ({size_bytes} bytes)")
+    print("Ready for Chrome Web Store Developer Dashboard upload.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command")
@@ -2166,6 +2260,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("uninstall", help="Remove the coordinator and native host registrations")
     sub.add_parser("doctor", help="Check installation paths, browsers, and coordinator connectivity")
     sub.add_parser("self-test", help="Run embedded validation tests")
+    pack_parser = sub.add_parser("pack-extension", help="Package extension for Chrome Web Store distribution")
+    pack_parser.add_argument("--output-dir", default="dist", help="Output directory for zip archive (default: dist)")
     daemon_parser = sub.add_parser("daemon", help=argparse.SUPPRESS)
     daemon_parser.add_argument("--persistent", action="store_true")
     return parser
@@ -2187,6 +2283,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             return doctor()
         if args.command == "self-test":
             return self_test()
+        if args.command == "pack-extension":
+            return pack_extension(args.output_dir)
         if args.command == "daemon":
             return daemon_main(args.persistent)
         parser.print_help()

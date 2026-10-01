@@ -9,3 +9,5 @@ __pycache__/
 .cbdtg-*
 coordinator.sock
 run/
+dist/
+*.zip
