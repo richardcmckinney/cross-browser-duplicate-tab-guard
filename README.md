@@ -78,6 +78,19 @@ python3 cross_browser_duplicate_tab_guard.py status
 
 ---
 
+## Packaging for Chrome Web Store
+
+To build a clean, validated distribution archive ready for submission to the Chrome Web Store Developer Dashboard:
+
+```bash
+python3 scripts/package_extension.py
+```
+This validates the Manifest V3 structure, confirms all required icon dimensions (16px, 48px, 128px), strips development and OS artifacts (`.DS_Store`, `Thumbs.db`), and outputs `dist/cross-browser-duplicate-tab-guard-v<version>.zip`.
+
+See [docs/store_listing.md](docs/store_listing.md) for Chrome Web Store descriptions, categories, and permission justifications.
+
+---
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
