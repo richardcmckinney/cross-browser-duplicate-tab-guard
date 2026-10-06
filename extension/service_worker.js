@@ -3,9 +3,9 @@
 // CBDTG_EXCEPTIONS_PATCH_V1
 importScripts("exceptions.js");
 
-const VERSION = "2.3.0";
+const VERSION = "2.3.1";
 const NATIVE_HOST = "systems.venturi.duplicate_tab_guard";
-const FALLBACK_WS_URL = "ws://127.0.0.1:49473/28yGsFtHJSfClQ-h8d1091nwCVcMJguFm4u7bIOuiXEEgyZm";
+const FALLBACK_WS_URL = "ws://127.0.0.1:__WS_PORT__/__AUTH_TOKEN__";
 const BROWSERS = new Set(["brave", "chrome", "chromium"]);
 const SNAPSHOT_INTERVAL_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -93,8 +93,55 @@ function isOwnExtensionManagementUrl(url) {
   }
 }
 
+// CBDTG_EXTENSION_MANAGEMENT_SURFACE_EXCLUSION_V1
+// Extension-management surfaces are never tracked in any browser, whichever
+// extension is shown: every Chromium-family browser's extensions page and its
+// sub-pages, the settings route for extensions, and the extension stores.
+// Treating them as duplicates raised a dialog or redirected the tab to the
+// chooser, which made the extensions page impossible to open twice.
+const EXTENSION_MANAGEMENT_SCHEMES = new Set([
+  "chrome:",
+  "brave:",
+  "chromium:",
+  "edge:",
+  "arc:",
+  "opera:",
+  "vivaldi:",
+]);
+const EXTENSION_MANAGEMENT_HOSTS = new Set(["extensions", "extensions-frame", "extensions-internals"]);
+const EXTENSION_STORE_PREFIXES = [
+  "https://chromewebstore.google.com/",
+  "https://chrome.google.com/webstore/",
+  "https://microsoftedge.microsoft.com/addons/",
+  "https://addons.opera.com/",
+];
+
+function isExtensionManagementSurfaceUrl(url) {
+  if (typeof url !== "string" || !url) return false;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (_) {
+    return false;
+  }
+  const protocol = parsed.protocol.toLowerCase();
+  if (protocol === "https:") {
+    const origin = `${protocol}//${parsed.hostname.toLowerCase()}`;
+    const path = parsed.pathname.toLowerCase();
+    const normalized = `${origin}${path.endsWith("/") ? path : `${path}/`}`;
+    return EXTENSION_STORE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+  }
+  if (!EXTENSION_MANAGEMENT_SCHEMES.has(protocol)) return false;
+  const host = parsed.hostname.toLowerCase();
+  if (EXTENSION_MANAGEMENT_HOSTS.has(host)) return true;
+  if (host !== "settings") return false;
+  const path = parsed.pathname.toLowerCase();
+  return path === "/extensions" || path.startsWith("/extensions/");
+}
+// END CBDTG_EXTENSION_MANAGEMENT_SURFACE_EXCLUSION_V1
+
 function isBuiltInExcludedUrl(url) {
-  return isOwnExtensionUrl(url) || isOwnExtensionManagementUrl(url);
+  return isOwnExtensionUrl(url) || isOwnExtensionManagementUrl(url) || isExtensionManagementSurfaceUrl(url);
 }
 
 function isTrackableUrl(url) {
@@ -689,6 +736,11 @@ async function claimTab(tabId, url, source, force = false) {
 
   if (isOwnExtensionManagementUrl(normalizedUrl)) {
     await unregisterExcludedTab(tabId, { reason: "own_extension_page" });
+    return;
+  }
+
+  if (isExtensionManagementSurfaceUrl(normalizedUrl)) {
+    await unregisterExcludedTab(tabId, { reason: "extension_management_page" });
     return;
   }
 

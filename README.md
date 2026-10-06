@@ -94,3 +94,10 @@ See [docs/store_listing.md](docs/store_listing.md) for Chrome Web Store descript
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+## Extension-management pages are never tracked
+
+The guard never tracks or redirects extension-management surfaces in any browser, so they can be open in
+several tabs and browsers at once: `chrome://extensions`, `brave://extensions`, `edge://extensions`,
+`arc://extensions` (and the Opera and Vivaldi equivalents) with every sub-page, `brave://settings/extensions`,
+the Chrome Web Store (`chromewebstore.google.com`, `chrome.google.com/webstore`), Edge Add-ons and Opera add-ons.
