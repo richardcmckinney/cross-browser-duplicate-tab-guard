@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cross-Browser Duplicate Tab Guard",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Prevents exact-URL duplicate tabs across Brave, Chrome, and Chromium, identifying pre-existing duplicate browser locations, with editable exceptions, runtime-ID-aware own-page exclusions, and navigation API compatibility fallbacks.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuiXZIY3iosKFylijfVygTd2esQ0a6DTNkYhXeqc/atLRzLnihPQpYu7nAJVd0tN+3xaotBnQyK846tIbZce/HMotXjMCWgWLyFqNLfcSWJnHQo1KLY7GDhXJ1OhMGDPGmDsADdff2qP+G6iZ0jT86AiXnSxmusr6uHB9tWFKcOO2hrm01WE+KmzOpC3NOlyQg2EOjTXmJp6JVq1jOJlSPjZ2Myq/jzW5BWZibeB7xErCnxaNT6JDtzW1C0NYdjVejozUCIuslb587mlhLG0tcbGhTZ7tI5Iq/e3h/5Q1xkr/eBe7fAuuJFBEr9XT3kYbABJyvA05Ofiyd7pzwNCvKwIDAQAB",
