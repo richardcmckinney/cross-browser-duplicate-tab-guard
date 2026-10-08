@@ -1,65 +1,94 @@
-# Chrome Web Store Listing & Store Assets Specification
+# Chrome Web Store submission sheet
 
-## 1. Extension Details
-- **Name**: Cross-Browser Duplicate Tab Guard
-- **Short Name**: Tab Guard
-- **Version**: 2.3.0
-- **Category**: Productivity / Workflow & Planning
-- **Primary Language**: English
-- **Supported Platforms**: Chrome, Brave, Chromium (macOS & Linux)
+Everything the Chrome Web Store Developer Dashboard asks for, in the order the dashboard asks for it. The upload ZIP comes from `python3 scripts/package_extension.py` (see the README); do not upload a ZIP made any other way, because only that build removes the per-computer settings an installed copy carries.
 
----
+## 1. Package
 
-## 2. Store Copy & Descriptions
+| Field | Value |
+| :--- | :--- |
+| Upload file | `dist/cross-browser-duplicate-tab-guard-v2.3.1-webstore.zip` (its SHA-256 is written next to it) |
+| Version | 2.3.1 (from `extension/manifest.json`) |
+| Manifest | Version 3; no `key` field (the store assigns the item ID); description cut to the store's 132-character limit |
+| Companion | Users also need the free companion app from this repository; the extension tells them when it is missing |
 
-### Short Description (Max 132 Characters)
-> Prevent duplicate tabs across Chrome, Brave, and Chromium. Coordinates open URLs locally with customizable domain exceptions.
+The store signs the item with its own key, so the published extension gets a new ID. After the first upload, copy that ID from the dashboard into `STORE_EXTENSION_IDS` in `cross_browser_duplicate_tab_guard.py` and release the companion, so its native messaging manifest and its identity checks accept the store build as well as the unpacked one.
 
-### Detailed Description (Markdown / Store Formatted)
-```markdown
-Cross-Browser Duplicate Tab Guard coordinates open tab state across Google Chrome, Brave, and Chromium, preventing accidental duplicate tabs across multiple windows and browsers.
+The store build talks to the companion over native messaging only. Flatpak builds of Chromium and Brave cannot start a native messaging host outside their sandbox, so on those the unpacked build (with its loopback connection) remains the supported install.
 
-When you navigate to a URL that is already open in another window or browser, Tab Guard intercepts the navigation and presents an elegant, non-intrusive in-page modal informing you where the pre-existing tab is located (e.g., "Already open in Brave"). You can choose to instantly jump to the existing tab, keep the new tab open, or exclude the domain from future checks.
+## 2. Store listing tab
 
-KEY FEATURES:
-• Cross-Browser Coordination: Synchronizes tab states across Chrome, Brave, and Chromium via a lightweight local native messaging daemon.
-• Closed Shadow DOM Dialogs: In-page duplicate modals use isolated closed Shadow DOM containers to prevent website style bleed or script interference.
-• Powerful Exception Engine: Easily whitelist websites by exact URL, domain, wildcard, or regular expression with in-memory memoized matching.
-• Local-First & Zero Telemetry: 100% of coordination occurs locally on your machine over Unix domain sockets and loopback WebSockets (127.0.0.1). Zero remote telemetry, zero tracking, and no external server requests.
-• Incognito & Private Support: Split context support allows private tabs to be managed safely without leaking browsing history across profiles.
+**Item name** (from the manifest): Cross-Browser Duplicate Tab Guard
 
-SETUP:
-1. Load this extension in your Chromium-based browser(s).
-2. Run the lightweight local companion coordinator daemon.
-3. Enjoy duplicate-free browsing across your entire desktop workflow!
+**Summary** (from the manifest, 127 characters):
+> Stops exact-URL duplicate tabs across Chrome, Brave and Chromium, with editable exceptions. Needs the free local companion app.
+
+**Description:**
+
+```text
+Cross-Browser Duplicate Tab Guard keeps one copy of each web page open across Google Chrome, Brave and Chromium on the same computer.
+
+When you open a URL that is already open in another tab, window or browser, the extension tells you where the existing copy is (for example "Already open in Brave") and takes you to it. When the same URL is open in more than one browser, you choose which browser keeps it and the other copies close.
+
+What it does
+- Works across browsers: Chrome, Brave and Chromium on one computer share a single view of open tabs through a small companion app that runs locally.
+- Matches exact URLs, so different pages on the same site are never treated as duplicates.
+- Exceptions: leave chosen pages alone by exact URL, host, domain, wildcard or regular expression, for normal windows, private windows or both.
+- Pause: switch the guard off for a set time from the toolbar popup.
+- Private windows: runs in Incognito only if you allow it, and labels private copies as private.
+- Leaves browser pages such as the extensions page and the Chrome Web Store alone.
+
+Privacy
+Everything stays on your computer. Tab addresses and titles go only to the companion app on the same machine, which keeps them in memory and never writes them to disk. No analytics, no accounts, no remote servers.
+
+Setup
+1. Install this extension.
+2. Install the companion app (macOS or Linux, Python 3.9 or later): https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard
+3. Open the extension's toolbar popup to confirm it is connected.
 ```
 
----
-
-## 3. Permissions Justifications (Chrome Web Store Review)
-
-| Permission | Justification for Chrome Web Store Reviewers |
+| Field | Value |
 | :--- | :--- |
-| `tabs` | Required to query open tab URLs across the browser to detect duplicates and switch focus to an existing tab upon user confirmation. |
-| `webNavigation` | Required to detect URL navigations at `onBeforeNavigate` and `onCommitted` before rendering, enabling early duplicate interception. |
-| `storage` | Required to store user-configured URL exception rules, whitelist patterns, and pause durations locally on the device. |
-| `alarms` | Required for periodic background service worker heartbeats to maintain connectivity with the local coordinator daemon across sleep/wake transitions. |
-| `nativeMessaging` | Required for bidirectional communication with the local coordinator daemon on the host machine to coordinate tab state across browser families. |
+| Category | Productivity > Workflow & Planning |
+| Language | English |
+| Store icon | 128 x 128 PNG (`extension/icons/icon128.png`) |
+| Screenshots | 1280 x 800 PNG, 1 to 5: duplicate notice, browser chooser, exception list |
+| Small promo tile | 440 x 280 PNG |
+| Marquee promo tile | 1400 x 560 PNG (optional) |
+| Homepage URL | https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard |
+| Support URL | https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard/issues |
 
----
+## 3. Privacy practices tab
 
-## 4. Privacy & Data Handling Declarations
-- **Single Purpose**: Cross-browser tab deduplication and window navigation.
-- **Data Collection**: No user data, browsing history, or personal information is collected, stored remotely, or transmitted to any third party.
-- **Network Boundaries**: The extension communicates exclusively with `localhost` (`127.0.0.1`) over native messaging and local loopback sockets.
+**Single purpose:**
+> Prevent the same exact URL from being open in more than one tab across Chrome, Brave and Chromium on the same computer, and take the user to the copy that is already open.
 
----
+**Permission justifications:**
 
-## 5. Graphic Assets Checklist
-- [x] **16x16 PNG**: Toolbar / favicon (`extension/icons/icon16.png`)
-- [x] **32x32 PNG**: Windows / high-DPI display icon (`extension/icons/icon32.png`)
-- [x] **48x48 PNG**: Extensions management page (`extension/icons/icon48.png`)
-- [x] **128x128 PNG**: Chrome Web Store listing & installation icon (`extension/icons/icon128.png`)
-- [x] **SVG Master**: Vector source icon (`extension/icons/icon.svg`)
-- [ ] **Small Promo Tile**: 440x280 px PNG (for Web Store carousel / category listing)
-- [ ] **Store Screenshots**: 1280x800 px PNG (1–5 screenshots showing in-page modal and popup exception manager)
+| Permission | Justification |
+| :--- | :--- |
+| `tabs` | Reads the URL, title and window of open tabs to find exact-URL duplicates; focuses the existing tab, opens the copy the user chooses to keep, and closes the duplicates the user chose to close. |
+| `webNavigation` | Listens to `onCommitted`, `onHistoryStateUpdated` and `onReferenceFragmentUpdated` so a duplicate is caught as soon as a tab commits to a URL, including in-page route changes. |
+| `storage` | Keeps the user's exception rules, pause setting, chosen browser name and a random profile identifier in `chrome.storage.local`, and pending duplicate prompts in `chrome.storage.session`. Nothing is synced or sent anywhere. |
+| `alarms` | Runs a one-minute health check that reconnects the service worker to the local companion app after sleep, browser restarts or a companion restart. |
+| `nativeMessaging` | Exchanges tab state with the local companion app (`systems.venturi.duplicate_tab_guard`), which coordinates tabs between Chrome, Brave and Chromium on the same computer. |
+| Host permission `<all_urls>` and the content script | The content script draws the "already open" dialog and the browser chooser inside the page the user just opened. Duplicates can happen on any site, so it must be able to run on any page; it reads only the page address and never the page content. |
+
+**Remote code:** No, I am not using remote code. Every script is in the package; the extension loads no external scripts, modules or `eval` input.
+
+**Data usage** (what to tick, and why):
+
+- Tick **Web history**: the extension reads the URLs and titles of open tabs and passes them to the companion app on the same computer. It never leaves the computer, but declaring it keeps the listing accurate about what the extension handles.
+- Leave every other category unticked (personally identifiable information, health, financial and payment, authentication, personal communications, location, user activity, website content): the extension does not handle them.
+- Tick all three certifications: data is not sold or transferred to third parties outside the approved use cases; not used or transferred for purposes unrelated to the single purpose; not used or transferred to determine creditworthiness or for lending.
+
+**Privacy policy URL:** https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard/blob/main/PRIVACY.md
+
+## 4. Distribution tab
+
+Visibility (public or unlisted), regions and the publisher name are the account owner's choice and are made in the dashboard.
+
+## 5. Before pressing Submit
+
+- [ ] The ZIP was built by `scripts/package_extension.py` from a clean checkout of `main`, and its SHA-256 matches the `.sha256` file.
+- [ ] `PRIVACY.md` is on `main`, so the privacy policy URL resolves.
+- [ ] The screenshots show the current version of the popup and dialogs.

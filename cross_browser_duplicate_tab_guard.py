@@ -22,6 +22,7 @@ import io
 import json
 import os
 import platform
+import re
 import secrets
 import shlex
 import shutil
@@ -47,6 +48,21 @@ APP_VERSION = "2.3.1"
 HOST_NAME = "systems.venturi.duplicate_tab_guard"
 EXTENSION_ID = "ealdapdhgkonfamgboejhjaniepdjihk"
 EXTENSION_ORIGIN = f"chrome-extension://{EXTENSION_ID}/"
+# The Chrome Web Store signs a published item with its own key, so the store
+# build gets a different extension ID from the unpacked build above. Add that
+# ID here once the store item exists (the Developer Dashboard shows it after the
+# first upload); the companion then accepts both builds. While this is empty the
+# companion accepts only the unpacked build, exactly as before.
+STORE_EXTENSION_IDS: tuple[str, ...] = ()
+ALLOWED_EXTENSION_IDS: tuple[str, ...] = (EXTENSION_ID,) + tuple(
+    item for item in STORE_EXTENSION_IDS if item != EXTENSION_ID
+)
+ALLOWED_EXTENSION_ORIGINS: tuple[str, ...] = tuple(f"chrome-extension://{item}/" for item in ALLOWED_EXTENSION_IDS)
+# Chrome Web Store limits the manifest description to 132 characters.
+WEBSTORE_DESCRIPTION = (
+    "Stops exact-URL duplicate tabs across Chrome, Brave and Chromium, "
+    "with editable exceptions. Needs the free local companion app."
+)
 DEFAULT_WS_PORT = 49473
 MAX_MESSAGE_BYTES = 16 * 1024 * 1024
 MAX_URL_CHARS = 131_072
@@ -277,7 +293,7 @@ def native_manifest_payload() -> str:
         "description": "Local in-memory coordinator for Cross-Browser Duplicate Tab Guard",
         "path": str(installed_script_path()),
         "type": "stdio",
-        "allowed_origins": [EXTENSION_ORIGIN],
+        "allowed_origins": list(ALLOWED_EXTENSION_ORIGINS),
     }
     return json.dumps(payload, indent=2) + "\n"
 
@@ -685,7 +701,7 @@ class Coordinator:
 
     def register_client(self, sender: Callable[[dict[str, Any]], bool], message: dict[str, Any], transport: str) -> Optional[ClientSession]:
         extension_id = self._clean_string(message.get("extension_id"), 64)
-        if extension_id != EXTENSION_ID:
+        if extension_id not in ALLOWED_EXTENSION_IDS:
             sender({"type": "fatal", "error": "Unrecognized extension identity."})
             return None
         supplied = self._clean_string(message.get("browser"), 32).lower()
@@ -1319,7 +1335,7 @@ class WebSocketCoordinatorHandler(CoordinatorHandlerMixin, socketserver.BaseRequ
                 self.request.sendall(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
                 return
             origin = headers.get("origin", "")
-            if origin and origin.rstrip("/") != EXTENSION_ORIGIN.rstrip("/"):
+            if origin and origin.rstrip("/") not in {item.rstrip("/") for item in ALLOWED_EXTENSION_ORIGINS}:
                 self.request.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
                 return
             key = headers.get("sec-websocket-key", "")
@@ -1993,7 +2009,8 @@ def self_test() -> int:
 
         manifest = json.loads(native_manifest_payload())
         assert manifest["name"] == HOST_NAME
-        assert manifest["allowed_origins"] == [EXTENSION_ORIGIN]
+        assert manifest["allowed_origins"] == list(ALLOWED_EXTENSION_ORIGINS)
+        assert manifest["allowed_origins"][0] == EXTENSION_ORIGIN
         assert Path(manifest["path"]).is_absolute()
 
     run_check("macOS/Linux browser distinctions and native-host paths", native_paths_and_launch_commands)
@@ -2238,6 +2255,50 @@ def self_test() -> int:
 
     run_check("native messaging framing", native_framing)
 
+    def webstore_package_build() -> None:
+        secret = "S" * 48
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "unpacked"
+            for rel, text in render_extension_files({"token": secret, "ws_port": 49999}).items():
+                target = src / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+            source_manifest = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
+            for icon in source_manifest.get("icons", {}).values():
+                target = src / icon
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if not target.exists():
+                    target.write_bytes(b"\x89PNG\r\n\x1a\n")
+            assert secret in (src / "service_worker.js").read_text(encoding="utf-8")
+            first = build_webstore_package(src, Path(tmp) / "a", [secret])
+            second = build_webstore_package(src, Path(tmp) / "b", [secret])
+            assert first.read_bytes() == second.read_bytes(), "store ZIP is not reproducible"
+            with zipfile.ZipFile(first) as archive:
+                names = archive.namelist()
+                packaged = {name: archive.read(name) for name in names}
+            assert names == sorted(names)
+            assert not any(name.startswith(".") or name.endswith(".svg") for name in names)
+            manifest = json.loads(packaged["manifest.json"])
+            assert "key" not in manifest
+            assert manifest["description"] == WEBSTORE_DESCRIPTION and len(WEBSTORE_DESCRIPTION) <= 132
+            assert "127.0.0.1" not in json.dumps(manifest)
+            assert manifest["version"] == APP_VERSION
+            worker = packaged["service_worker.js"].decode("utf-8")
+            assert 'const FALLBACK_WS_URL = "";' in worker and WEBSTORE_GUARD in worker
+            for data in packaged.values():
+                assert secret.encode() not in data and b"ws://" not in data
+            node = shutil.which("node")
+            if node:
+                checked = Path(tmp) / "store_service_worker.js"
+                checked.write_text(worker, encoding="utf-8")
+                completed = subprocess.run([node, "--check", str(checked)], capture_output=True, text=True)
+                assert completed.returncode == 0, completed.stderr
+            leaky = dict(packaged)
+            leaky["popup.js"] = leaky["popup.js"] + secret.encode()
+            assert any("loopback token" in item for item in webstore_package_problems(manifest, leaky, [secret]))
+
+    run_check("Chrome Web Store build strips the developer key and loopback token", webstore_package_build)
+
     if failures:
         print("Self-test FAILED")
         for failure in failures:
@@ -2249,60 +2310,157 @@ def self_test() -> int:
     return 0
 
 
-def pack_extension(output_dir: str = "dist") -> int:
-    """Package the extension for Chrome Web Store distribution."""
-    local_ext = Path(__file__).resolve().parent / "extension"
-    src_dir = local_ext if local_ext.is_dir() else extension_dir()
+# Chrome Web Store build ------------------------------------------------------
+#
+# The unpacked build is tied to the computer it was installed on: its manifest
+# carries the developer "key" that pins the unpacked extension ID, its service
+# worker can carry this computer's loopback WebSocket port and secret token
+# (written in by `install`), and its CSP is narrowed to that loopback endpoint.
+# None of that may ship in a published package. build_webstore_package derives
+# a store build from the unpacked source, validates it, and writes a
+# byte-reproducible ZIP for the Chrome Web Store Developer Dashboard.
 
+WEBSTORE_PERMISSIONS = frozenset({"alarms", "nativeMessaging", "storage", "tabs", "webNavigation"})
+WEBSTORE_FILE_SUFFIXES = (".css", ".html", ".js", ".json", ".png")
+WEBSTORE_TEXT_SUFFIXES = (".css", ".html", ".js", ".json")
+WEBSTORE_EPOCH = 1767225600  # 2026-01-01T00:00:00Z: fixed ZIP timestamps keep the archive reproducible
+WEBSTORE_FALLBACK_LINE = re.compile(r'^const FALLBACK_WS_URL = "[^"\n]*";$', re.MULTILINE)
+WEBSTORE_GUARD_ANCHOR = "async function connectWebSocket() {\n"
+WEBSTORE_GUARD = (
+    "  // Chrome Web Store build: a per-computer loopback token cannot ship in a\n"
+    "  // published package, so this build talks to the companion over native\n"
+    "  // messaging only and keeps retrying with the usual backoff.\n"
+    "  if (!FALLBACK_WS_URL) {\n"
+    "    lastNativeError = lastNativeError\n"
+    "      ? `The local companion app could not be reached (${lastNativeError}).`\n"
+    "      : \"The local companion app is not installed or not running.\";\n"
+    "    scheduleReconnect();\n"
+    "    return;\n"
+    "  }\n"
+)
+WEBSTORE_FORBIDDEN_TEXT = ("__AUTH_TOKEN__", "__WS_PORT__", "ws://", "127.0.0.1", "localhost", "/Users/", "/home/")
+
+
+def webstore_package_problems(manifest: dict[str, Any], files: dict[str, bytes], secrets_to_exclude: Iterable[str] = ()) -> list[str]:
+    """Return every reason the derived store build must not be uploaded."""
+    problems: list[str] = []
+    if manifest.get("manifest_version") != 3:
+        problems.append("manifest_version must be 3")
+    if "key" in manifest:
+        problems.append("manifest.json still carries the developer key")
+    name = str(manifest.get("name", ""))
+    description = str(manifest.get("description", ""))
+    if not 0 < len(name) <= 75:
+        problems.append(f"manifest name must be 1 to 75 characters (it is {len(name)})")
+    if not 0 < len(description) <= 132:
+        problems.append(f"manifest description must be 1 to 132 characters (it is {len(description)})")
+    unexpected = set(manifest.get("permissions", [])) - WEBSTORE_PERMISSIONS
+    if unexpected:
+        problems.append(f"unexpected permissions: {sorted(unexpected)}")
+    for size in ("16", "32", "48", "128"):
+        icon = manifest.get("icons", {}).get(size)
+        if not icon or icon not in files:
+            problems.append(f"icon {size} is not declared or not packaged")
+    worker = files.get("service_worker.js", b"").decode("utf-8", "replace")
+    if 'const FALLBACK_WS_URL = "";' not in worker or WEBSTORE_GUARD not in worker:
+        problems.append("service_worker.js: loopback fallback was not disabled")
+    secrets_list = [item for item in secrets_to_exclude if item]
+    for rel, data in sorted(files.items()):
+        if not rel.endswith(WEBSTORE_TEXT_SUFFIXES):
+            continue
+        text = data.decode("utf-8", "replace")
+        for marker in WEBSTORE_FORBIDDEN_TEXT:
+            if marker in text:
+                problems.append(f"{rel}: contains computer-specific text {marker!r}")
+        for secret in secrets_list:
+            if secret in text:
+                problems.append(f"{rel}: contains this computer's loopback token")
+    return problems
+
+
+def build_webstore_package(src_dir: Union[str, Path], out_dir: Union[str, Path], secrets_to_exclude: Iterable[str] = ()) -> Path:
+    """Derive, validate and write the Chrome Web Store upload ZIP."""
+    src_dir = Path(src_dir)
+    out_dir = Path(out_dir)
     manifest_path = src_dir / "manifest.json"
     if not manifest_path.exists():
         raise GuardError(f"manifest.json not found in {src_dir}")
-
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        raise GuardError(f"Failed to parse manifest.json: {e}")
+    except (OSError, ValueError) as exc:
+        raise GuardError(f"Failed to parse manifest.json: {exc}") from exc
 
-    version = manifest.get("version", "0.0.0")
-    name = manifest.get("name", "extension")
+    # Manifest: drop the developer key (the store assigns its own) and the
+    # loopback-only CSP, and use the store-length description.
+    manifest.pop("key", None)
+    manifest.pop("update_url", None)
+    manifest["description"] = WEBSTORE_DESCRIPTION
+    csp = manifest.get("content_security_policy")
+    if isinstance(csp, dict) and "extension_pages" in csp:
+        csp["extension_pages"] = "script-src 'self'; object-src 'self';"
 
-    if manifest.get("manifest_version") != 3:
-        raise GuardError("Chrome Web Store requires manifest_version 3")
+    # Files: only runtime assets; dot files, backups and the SVG master stay out.
+    files: dict[str, bytes] = {}
+    for path in sorted(src_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(src_dir).as_posix()
+        if rel == "manifest.json" or any(part.startswith((".", "_")) for part in rel.split("/")):
+            continue
+        if not rel.endswith(WEBSTORE_FILE_SUFFIXES):
+            continue
+        files[rel] = path.read_bytes()
 
-    icons = manifest.get("icons", {})
-    for req_size in ("16", "48", "128"):
-        icon_rel = icons.get(req_size)
-        if not icon_rel:
-            print(f"Warning: icon size {req_size} is not declared in manifest.json icons")
-        elif not (src_dir / icon_rel).exists():
-            raise GuardError(f"Icon file referenced in manifest does not exist: {src_dir / icon_rel}")
+    worker_bytes = files.get("service_worker.js")
+    if worker_bytes is None:
+        raise GuardError("service_worker.js not found")
+    worker = worker_bytes.decode("utf-8")
+    worker, replaced = WEBSTORE_FALLBACK_LINE.subn('const FALLBACK_WS_URL = "";', worker)
+    if replaced != 1:
+        raise GuardError(f"service_worker.js: expected one FALLBACK_WS_URL declaration, found {replaced}")
+    if worker.count(WEBSTORE_GUARD_ANCHOR) != 1:
+        raise GuardError("service_worker.js: connectWebSocket() anchor not found exactly once")
+    worker = worker.replace(WEBSTORE_GUARD_ANCHOR, WEBSTORE_GUARD_ANCHOR + WEBSTORE_GUARD, 1)
+    files["service_worker.js"] = worker.encode("utf-8")
+    files["manifest.json"] = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
 
-    out_path = Path(output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
-    zip_name = f"cross-browser-duplicate-tab-guard-v{version}.zip"
-    zip_dest = out_path / zip_name
+    problems = webstore_package_problems(manifest, files, secrets_to_exclude)
+    if problems:
+        raise GuardError("The Chrome Web Store build was rejected:\n  - " + "\n  - ".join(problems))
 
-    ignore_patterns = {".DS_Store", "Thumbs.db", "__pycache__", ".git", ".gitignore"}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    destination = out_dir / f"{APP_SLUG}-v{manifest.get('version', '0.0.0')}-webstore.zip"
+    stamp = time.gmtime(WEBSTORE_EPOCH)[:6]
+    with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
+        for rel in sorted(files):
+            info = zipfile.ZipInfo(rel, date_time=stamp)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, files[rel])
+    return destination
 
-    file_count = 0
-    with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root_dir, dirs, files in os.walk(src_dir):
-            dirs[:] = [d for d in dirs if d not in ignore_patterns and not d.startswith((".", "_"))]
-            for file in sorted(files):
-                if file in ignore_patterns or file.endswith(("~", ".bak", ".tmp", ".swp")):
-                    continue
-                file_path = Path(root_dir) / file
-                arcname = file_path.relative_to(src_dir)
-                zf.write(file_path, arcname)
-                file_count += 1
 
-    size_bytes = zip_dest.stat().st_size
-    size_kb = size_bytes / 1024.0
-    print(f"Successfully packaged {name} v{version}:")
-    print(f"  Archive: {zip_dest}")
-    print(f"  Files:   {file_count}")
-    print(f"  Size:    {size_kb:.1f} KB ({size_bytes} bytes)")
-    print("Ready for Chrome Web Store Developer Dashboard upload.")
+def pack_extension(output_dir: str = "dist") -> int:
+    """Build the Chrome Web Store package from the extension folder."""
+    local_ext = Path(__file__).resolve().parent / "extension"
+    src_dir = local_ext if local_ext.is_dir() else extension_dir()
+    # On a computer where `install` ran, the rendered extension holds this
+    # computer's loopback token; refuse any build that still contains it.
+    token = ""
+    try:
+        token = str(load_config(create=False).get("token", ""))
+    except GuardError:
+        token = ""
+    destination = build_webstore_package(src_dir, output_dir, [token])
+    data = destination.read_bytes()
+    with zipfile.ZipFile(destination) as archive:
+        names = archive.namelist()
+    print(f"Chrome Web Store package for {APP_NAME}:")
+    print(f"  Archive: {destination}")
+    print(f"  Files:   {len(names)}")
+    print(f"  Size:    {len(data)} bytes")
+    print(f"  SHA-256: {hashlib.sha256(data).hexdigest()}")
+    print("Upload this file in the Chrome Web Store Developer Dashboard; see docs/store_listing.md.")
     return 0
 
 
