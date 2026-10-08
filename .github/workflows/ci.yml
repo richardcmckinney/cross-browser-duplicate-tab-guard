@@ -30,7 +30,8 @@ jobs:
         # repository copy must stay portable.
         run: |
           test "$(head -n 1 cross_browser_duplicate_tab_guard.py)" = "#!/usr/bin/env python3"
-          if git grep -nIE '/Users/[a-z]|/home/(ssm-user|richardmckinney)|/opt/homebrew' -- . ':!store/images'; then
+          # The self-test's mock homes (/Users/guard-test, /home/guard-test) are fine.
+          if git grep -nIE '(/Users|/home)/(richardmckinney|ssm-user)|/opt/homebrew/Cellar' -- . ':!.github/workflows/ci.yml'; then
             echo "computer-specific path found in a tracked file" >&2
             exit 1
           fi
