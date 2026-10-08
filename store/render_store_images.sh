@@ -4,6 +4,7 @@
 #   store/images/screenshot_2_browser_chooser_1280x800.png    chooser page (chooser.html)
 #   store/images/screenshot_3_popup_exceptions_1280x800.png   toolbar popup (popup.html)
 #   store/images/promo_small_440x280.png                      small promo tile
+#   store/images/promo_marquee_1400x560.png                   marquee promo tile
 # The pages are the extension's own HTML, CSS and JavaScript; store/harness/stub.js stands in
 # for the browser extension APIs with fixed, fictional sample data (example.com), so nothing
 # from a real browser profile appears in the images.
@@ -28,7 +29,8 @@ cp "$ROOT"/extension/*.js "$ROOT"/extension/*.css "$ROOT"/extension/*.html "$WOR
 cp -R "$ROOT/extension/icons" "$WORK/web/"
 cp "$ROOT/store/harness/stub.js" "$WORK/web/"
 cp -R "$ROOT/store/harness/docs" "$WORK/"
-cp "$ROOT/store/harness/frame_popup.html" "$ROOT/store/harness/promo_small.html" "$WORK/"
+cp "$ROOT/store/harness/frame_popup.html" "$ROOT/store/harness/promo_small.html" \
+  "$ROOT/store/harness/promo_marquee.html" "$WORK/"
 # Load the stub before the extension's own scripts.
 sed 's#<script src="exceptions.js"></script>#<script src="stub.js"></script>\n  <script src="exceptions.js"></script>#' "$WORK/web/popup.html" > "$WORK/web/popup_shot.html"
 sed 's#<script src="chooser.js"></script>#<script src="stub.js"></script>\n  <script src="chooser.js"></script>#' "$WORK/web/chooser.html" > "$WORK/web/chooser_shot.html"
@@ -49,4 +51,5 @@ shot screenshot_1_duplicate_notice_1280x800.png docs/getting-started/ 1280,800
 shot screenshot_2_browser_chooser_1280x800.png web/chooser_shot.html 1280,800
 shot screenshot_3_popup_exceptions_1280x800.png frame_popup.html 1280,800
 shot promo_small_440x280.png promo_small.html 440,280
+shot promo_marquee_1400x560.png promo_marquee.html 1400,560
 ls -l "$OUT"
