@@ -54,10 +54,10 @@ Setup
 | Screenshots | `store/images/screenshot_1_duplicate_notice_1280x800.png`, `screenshot_2_browser_chooser_1280x800.png`, `screenshot_3_popup_exceptions_1280x800.png` |
 | Small promo tile | `store/images/promo_small_440x280.png` |
 | Marquee promo tile | Optional; none supplied |
-
-The images are rendered from the extension's own pages by `store/render_store_images.sh`, with fictional sample data on `example.com`, so they show the real interface and nothing from a real browser profile. Re-run it whenever the popup, chooser or dialog changes.
 | Homepage URL | https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard |
 | Support URL | https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard/issues |
+
+The images are rendered from the extension's own pages by `store/render_store_images.sh`, with fictional sample data on `example.com`, so they show the real interface and nothing from a real browser profile. Re-run it whenever the popup, chooser or dialog changes.
 
 ## 3. Privacy practices tab
 
