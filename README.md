@@ -73,21 +73,37 @@ The project consists of two core components:
 To verify that the coordinator and native messaging manifests are active across your browsers:
 
 ```bash
-python3 cross_browser_duplicate_tab_guard.py status
+python3 cross_browser_duplicate_tab_guard.py doctor
+```
+
+To run the embedded test suite (coordinator, native messaging framing, exception rules and the Chrome Web Store build):
+
+```bash
+python3 cross_browser_duplicate_tab_guard.py self-test
 ```
 
 ---
 
 ## Packaging for Chrome Web Store
 
-To build a clean, validated distribution archive ready for submission to the Chrome Web Store Developer Dashboard:
+To build the upload ZIP for the Chrome Web Store Developer Dashboard:
 
 ```bash
 python3 scripts/package_extension.py
 ```
-This validates the Manifest V3 structure, confirms all required icon dimensions (16px, 48px, 128px), strips development and OS artifacts (`.DS_Store`, `Thumbs.db`), and outputs `dist/cross-browser-duplicate-tab-guard-v<version>.zip`.
 
-See [docs/store_listing.md](docs/store_listing.md) for Chrome Web Store descriptions, categories, and permission justifications.
+The unpacked extension is tied to the computer it is installed on, so the store build changes it before packaging:
+
+- removes the manifest `key` (the store assigns its own extension ID) and uses the store-length description (132 characters at most);
+- turns off the loopback WebSocket fallback, whose port and secret token `install` writes into the service worker on each computer, and drops the loopback-only content security policy, so the store build talks to the companion over native messaging only;
+- leaves out dot files, backups and the SVG master icon;
+- refuses to write the ZIP if anything computer-specific is still in it (loopback addresses, home-directory paths, this computer's token).
+
+It writes `dist/cross-browser-duplicate-tab-guard-v<version>-webstore.zip` with fixed timestamps, so the same source always gives the same bytes, and its SHA-256 next to it. `python3 cross_browser_duplicate_tab_guard.py pack-extension` runs the same build. CI builds the ZIP on every pull request and keeps it as the `chrome-web-store-package` artifact.
+
+Flatpak builds of Chromium and Brave cannot start a native messaging host outside their sandbox, so on those the unpacked build remains the supported install.
+
+See [docs/store_listing.md](docs/store_listing.md) for every field the dashboard asks for (listing copy, permission justifications, privacy practices answers) and [PRIVACY.md](PRIVACY.md) for the privacy policy.
 
 ---
 

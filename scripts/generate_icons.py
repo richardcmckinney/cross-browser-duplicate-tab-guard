@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+"""Render the extension icon set (16, 32, 48 and 128 px) into extension/icons. Needs Pillow."""
 import os
 from PIL import Image, ImageDraw
 
@@ -98,7 +100,8 @@ def render_master_icon(size=1024):
     return bg_img
 
 def main():
-    target_dir = "/home/ssm-user/cross-browser-duplicate-tab-guard/extension/icons"
+    # The extension icons live in extension/icons next to this scripts/ folder.
+    target_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "extension", "icons")
     os.makedirs(target_dir, exist_ok=True)
     
     master = render_master_icon(size=1024)
