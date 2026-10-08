@@ -53,7 +53,7 @@ Setup
 | Store icon | 128 x 128 PNG (`extension/icons/icon128.png`) |
 | Screenshots | `store/images/screenshot_1_duplicate_notice_1280x800.png`, `screenshot_2_browser_chooser_1280x800.png`, `screenshot_3_popup_exceptions_1280x800.png` |
 | Small promo tile | `store/images/promo_small_440x280.png` |
-| Marquee promo tile | Optional; none supplied |
+| Marquee promo tile | `store/images/promo_marquee_1400x560.png` |
 | Homepage URL | https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard |
 | Support URL | https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard/issues |
 
