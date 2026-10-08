@@ -51,9 +51,11 @@ Setup
 | Category | Productivity > Workflow & Planning |
 | Language | English |
 | Store icon | 128 x 128 PNG (`extension/icons/icon128.png`) |
-| Screenshots | 1280 x 800 PNG, 1 to 5: duplicate notice, browser chooser, exception list |
-| Small promo tile | 440 x 280 PNG |
-| Marquee promo tile | 1400 x 560 PNG (optional) |
+| Screenshots | `store/images/screenshot_1_duplicate_notice_1280x800.png`, `screenshot_2_browser_chooser_1280x800.png`, `screenshot_3_popup_exceptions_1280x800.png` |
+| Small promo tile | `store/images/promo_small_440x280.png` |
+| Marquee promo tile | Optional; none supplied |
+
+The images are rendered from the extension's own pages by `store/render_store_images.sh`, with fictional sample data on `example.com`, so they show the real interface and nothing from a real browser profile. Re-run it whenever the popup, chooser or dialog changes.
 | Homepage URL | https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard |
 | Support URL | https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard/issues |
 
@@ -91,4 +93,4 @@ Visibility (public or unlisted), regions and the publisher name are the account 
 
 - [ ] The ZIP was built by `scripts/package_extension.py` from a clean checkout of `main`, and its SHA-256 matches the `.sha256` file.
 - [ ] `PRIVACY.md` is on `main`, so the privacy policy URL resolves.
-- [ ] The screenshots show the current version of the popup and dialogs.
+- [ ] The images in `store/images/` were rendered from the same commit as the ZIP.
