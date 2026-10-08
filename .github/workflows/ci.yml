@@ -25,10 +25,15 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - name: Companion script carries no computer-specific interpreter path
+      - name: No computer-specific paths in tracked files
         # `install` writes the local interpreter into the installed copy; the
         # repository copy must stay portable.
-        run: test "$(head -n 1 cross_browser_duplicate_tab_guard.py)" = "#!/usr/bin/env python3"
+        run: |
+          test "$(head -n 1 cross_browser_duplicate_tab_guard.py)" = "#!/usr/bin/env python3"
+          if git grep -nIE '/Users/[a-z]|/home/(ssm-user|richardmckinney)|/opt/homebrew' -- . ':!store/images'; then
+            echo "computer-specific path found in a tracked file" >&2
+            exit 1
+          fi
       - name: Embedded self-test (coordinator, native messaging, store build)
         run: python3 cross_browser_duplicate_tab_guard.py self-test
       - name: JavaScript syntax of the unpacked extension
