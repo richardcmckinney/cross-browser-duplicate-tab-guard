@@ -1,4 +1,4 @@
-#!/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/bin/python3.14
+#!/usr/bin/env python3
 """One-file installer and runtime for Cross-Browser Duplicate Tab Guard.
 
 Supported deployment targets: macOS and Linux.
