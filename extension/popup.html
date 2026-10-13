@@ -16,6 +16,30 @@
       <span id="connection" class="pill">Checking…</span>
     </div>
 
+    <section class="current-card tab-card" aria-labelledby="currentTabLabel">
+      <div class="tab-card-heading">
+        <p id="currentTabLabel" class="mini-label">Current tab</p>
+        <span id="tabContext" class="tab-context">Reading active tab…</span>
+      </div>
+      <p id="currentTitle" class="tab-title">Reading active tab…</p>
+      <div class="tab-reference">
+        <div class="tab-id-group">
+          <span class="tab-id-label">Tab ID</span>
+          <span id="currentTabId" class="tab-id" tabindex="0" aria-label="Current tab ID">—</span>
+        </div>
+        <button id="copyTab" type="button" class="secondary copy-tab" disabled title="Copy tab ID with browser, window and title">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.25" y="5.25" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 3.25v-.5a1 1 0 0 0-1-1H2.75a1 1 0 0 0-1 1V9.5a1 1 0 0 0 1 1h.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span id="copyTabLabel">Copy ID</span>
+        </button>
+      </div>
+      <p id="tabCopyStatus" class="copy-status" role="status" aria-live="polite">Includes browser, window and title.</p>
+      <p id="currentUrl" class="current-url">Reading active tab…</p>
+      <div class="quick-actions">
+        <button id="addExact" type="button" class="secondary" disabled>Exclude exact URL</button>
+        <button id="addHost" type="button" class="secondary" disabled>Exclude hostname</button>
+      </div>
+    </section>
+
     <dl>
       <div><dt>Guard</dt><dd id="guardStatus">—</dd></div>
       <div><dt>Browser</dt><dd id="browser">—</dd></div>
@@ -59,15 +83,6 @@
           <p id="guardMessage" class="microcopy"></p>
         </div>
 
-        <div class="current-card">
-          <p class="mini-label">Current page</p>
-          <p id="currentUrl" class="current-url">Reading active tab…</p>
-          <div class="quick-actions">
-            <button id="addExact" type="button" class="secondary">Exclude exact URL</button>
-            <button id="addHost" type="button" class="secondary">Exclude hostname</button>
-          </div>
-        </div>
-
         <details id="customRuleDetails" class="subpanel">
           <summary id="customRuleSummary">Add a custom rule</summary>
           <form id="ruleForm">
@@ -96,7 +111,7 @@
             <label for="rulePattern">Pattern</label>
             <div class="input-action">
               <input id="rulePattern" type="text" autocomplete="off" spellcheck="false" placeholder="https://example.com/path">
-              <button id="useCurrent" type="button" class="secondary compact">Use current</button>
+              <button id="useCurrent" type="button" class="secondary compact" disabled>Use current</button>
             </div>
 
             <div class="field-grid">
