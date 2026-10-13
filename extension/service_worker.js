@@ -3,7 +3,7 @@
 // CBDTG_EXCEPTIONS_PATCH_V1
 importScripts("exceptions.js");
 
-const VERSION = "2.3.1";
+const VERSION = "2.4.0";
 const NATIVE_HOST = "systems.venturi.duplicate_tab_guard";
 const FALLBACK_WS_URL = "ws://127.0.0.1:__WS_PORT__/__AUTH_TOKEN__";
 const BROWSERS = new Set(["brave", "chrome", "chromium"]);
@@ -1087,13 +1087,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.extension.isAllowedIncognitoAccess(),
       chrome.extension.isAllowedFileSchemeAccess(),
       chrome.storage.local.get(["browserOverride", EXCEPTION_SETTINGS_KEY]),
-    ]).then(([incAllowed, fileAllowed, settings]) => {
+      detectBrowser(),
+    ]).then(([incAllowed, fileAllowed, settings, browser]) => {
       const exceptionState = CBDTGExceptions.normalizeSettings(settings[EXCEPTION_SETTINGS_KEY]);
       sendResponse({
         ok: true,
         version: VERSION,
         extension_id: chrome.runtime.id,
-        browser: runtimeBrowser,
+        profile_id: profileId,
+        session_id: sessionId,
+        browser,
         browser_override: settings.browserOverride || "auto",
         native_connected: nativeReady,
         native_error: lastNativeError,
@@ -1112,12 +1115,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "get_active_tab_context") {
-    chrome.tabs.query({ active: true, lastFocusedWindow: true }).then((tabs) => {
-      const tab = tabs[0] || null;
+    // The popup supplies its tab ID so focus changes in another window cannot change the target.
+    const target = Number.isInteger(message.tab_id) && message.tab_id >= 0
+      ? chrome.tabs.get(message.tab_id)
+      : chrome.tabs.query({ active: true, lastFocusedWindow: true }).then((tabs) => tabs[0] || null);
+    target.then((tab) => {
       let url = tab ? tabUrl(tab) : "";
       if (tab && isOwnExtensionUrl(url)) url = pendingOriginalUrl(tab.id);
       sendResponse({
         ok: true,
+        tab_id: tab ? tab.id : null,
+        window_id: tab ? tab.windowId : null,
         url,
         incognito: Boolean(tab && tab.incognito),
         browser: runtimeBrowser,

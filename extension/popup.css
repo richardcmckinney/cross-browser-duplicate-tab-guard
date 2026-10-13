@@ -37,6 +37,21 @@ select:focus, input:focus, textarea:focus, button:focus-visible, summary:focus-v
 .compact { min-height: 34px; padding: 6px 9px; }
 .microcopy { margin: 8px 0 0; color: #697386; font-size: 9px; line-height: 1.45; }
 .current-card { margin: 12px 0; padding: 11px; border: 1px solid #e5e8ed; border-radius: 10px; background: #f8f9fb; }
+.tab-card { margin: 16px 0 0; padding: 12px; }
+.tab-card-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tab-card-heading .mini-label { margin: 0; white-space: nowrap; }
+.tab-context { color: #697386; font-size: 9px; text-align: right; overflow-wrap: anywhere; }
+.tab-title { margin: 8px 0 10px; color: inherit; font-size: 12px; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tab-reference { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tab-id-group { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tab-id-label { color: #697386; font-size: 10px; white-space: nowrap; }
+.tab-id { min-width: 0; user-select: all; overflow-wrap: anywhere; font: 700 20px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: -.04em; }
+.tab-id:focus-visible { outline: 3px solid rgba(80,101,232,.28); outline-offset: 3px; border-radius: 3px; }
+button.copy-tab { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; min-height: 34px; }
+.copy-status { margin: 7px 0 9px; min-height: 13px; color: #697386; font-size: 9px; line-height: 1.45; }
+.copy-status.success { color: #027a48; }
+.copy-status.error { color: #b42318; }
+.clipboard-buffer { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
 .mini-label { margin: 0 0 4px; color: #697386; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .current-url { margin: 0; max-height: 34px; overflow: hidden; overflow-wrap: anywhere; color: #343b48; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .quick-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
@@ -85,6 +100,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   dt, .note, .eyebrow, .microcopy, .mini-label, .rules-heading, .switch-row small, .rule-note { color: #a6b0bf; }
   select, input, textarea { background: #22262e; border-color: #3e4652; }
   .current-card { background: #20242b; }
+  .tab-context, .tab-id-label, .copy-status { color: #a6b0bf; }
+  .copy-status.success, .note.success { color: #75deb0; }
+  .copy-status.error, .note.error { color: #ffaaa0; }
   .current-url, .subpanel > summary { color: #dce1e9; }
   .rule-item { background: #1d2128; }
   .empty-state { border-color: #3a414d; color: #9ca6b5; }

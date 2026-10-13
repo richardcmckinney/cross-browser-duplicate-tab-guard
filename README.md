@@ -6,6 +6,7 @@
 
 ## Features
 
+- **Current Tab Reference**: The popup immediately shows the active tab ID and title, with one-click copying of a readable browser/window/context reference. This works even when the local coordinator is disconnected.
 - **Cross-Browser State Coordination**: Synchronizes tab states across Chrome, Brave, and Chromium via local native messaging and Unix domain sockets (`/tmp/cbdtg-$UID/coordinator.sock` on Linux, persistent `Application Support` on macOS).
 - **Graceful Local Fallback**: Automatically falls back to a loopback WebSocket connection (`127.0.0.1:49473`) in sandboxed environments (such as Flatpak runtimes) where native messaging sockets are isolated.
 - **Intelligent Duplicate Chooser**: When you navigate to a URL that is already open in another window or browser, an in-page modal appears informing you exactly where the pre-existing tab is located (e.g., *"Already open in Brave"*, *"Already open in another Chrome window"*), with color-coded browser indicators and window/tab IDs.
@@ -73,8 +74,39 @@ The project consists of two core components:
 To verify that the coordinator and native messaging manifests are active across your browsers:
 
 ```bash
-python3 cross_browser_duplicate_tab_guard.py status
+python3 cross_browser_duplicate_tab_guard.py doctor
 ```
+
+---
+
+## Current tab reference
+
+The current-tab card stays visible above the settings and follows the active tab in the popup's
+owning window. Copy ID includes the tab ID, browser name, browser API window ID, title and
+regular/private context. When available, it also includes the existing Guard profile ID and
+Guard session ID. The Guard session identifies an extension-worker lifetime, **not** a complete
+browser session; tab/window IDs are browser-scoped and are **not** operating-system window IDs.
+Recheck a copied reference after closing its tab or restarting the browser.
+
+The title and tab ID render directly from the browser's tab API without waiting for the coordinator,
+settings or exception matching. Countdown updates only repaint the guard status, preserving saved-rule
+controls and keyboard focus. Failed settings writes keep the last confirmed state, and clipboard
+fallback uses a temporary buffer without replacing an unfinished rules import.
+
+### Popup behavior checks
+
+With Node.js and Playwright (including its Chromium browser) available in the test environment:
+
+```bash
+python3 cross_browser_duplicate_tab_guard.py self-test
+node --test tests/popup.test.cjs
+```
+
+Set PLAYWRIGHT_MODULE to the installed Playwright module path if it is outside the repository's
+module search path. The tests use mocked extension APIs and real popup rendering in Chromium,
+covering unavailable status/settings, owning-window selection, stale replies, title updates,
+clipboard failure, private tabs, storage-write rollback and keyboard-focus preservation.
+They do not read or modify any user browser profile.
 
 ---
 
