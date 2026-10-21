@@ -1,0 +1,17 @@
+{
+  "name": "cross-browser-duplicate-tab-guard-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reproducible development test dependencies for the coordinator and extension popup.",
+  "scripts": {
+    "test": "npm run test:coordinator && npm run test:popup",
+    "test:coordinator": "python3 cross_browser_duplicate_tab_guard.py self-test",
+    "test:popup": "node --test tests/popup.test.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

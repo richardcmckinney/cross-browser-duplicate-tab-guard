@@ -11,3 +11,4 @@ coordinator.sock
 run/
 dist/
 *.zip
+node_modules/

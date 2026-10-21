@@ -95,12 +95,17 @@ fallback uses a temporary buffer without replacing an unfinished rules import.
 
 ### Popup behavior checks
 
-With Node.js and Playwright (including its Chromium browser) available in the test environment:
+With Python and Node.js 20 or newer available, install the locked test dependency and Chromium once:
 
 ```bash
-python3 cross_browser_duplicate_tab_guard.py self-test
-node --test tests/popup.test.cjs
+npm ci
+npx playwright install chromium
+npm test
 ```
+
+The aggregate command runs the coordinator self-test and every popup test. Missing dependencies
+or a missing Chromium browser fail the command. To run one suite, use
+`npm run test:coordinator` or `npm run test:popup`.
 
 Set PLAYWRIGHT_MODULE to the installed Playwright module path if it is outside the repository's
 module search path. The tests use mocked extension APIs and real popup rendering in Chromium,
