@@ -15,9 +15,12 @@ jobs:
     timeout-minutes: 10
     env:
       CI: 'true'
-      TEST_HOME: ${{ runner.temp }}/duplicate-tab-guard-home
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/duplicate-tab-guard-browsers
     steps:
+      - name: Set isolated test paths
+        run: |
+          printf 'TEST_HOME=%s\n' "$RUNNER_TEMP/duplicate-tab-guard-home" >> "$GITHUB_ENV"
+          printf 'PLAYWRIGHT_BROWSERS_PATH=%s\n' "$RUNNER_TEMP/duplicate-tab-guard-browsers" >> "$GITHUB_ENV"
+
       - name: Checkout reviewed source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
