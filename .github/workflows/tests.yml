@@ -1,0 +1,44 @@
+name: Coordinator and popup tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    if: github.repository == 'richardcmckinney/cross-browser-duplicate-tab-guard' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: 'true'
+      TEST_HOME: ${{ runner.temp }}/duplicate-tab-guard-home
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/duplicate-tab-guard-browsers
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install locked test dependency
+        timeout-minutes: 3
+        run: |
+          mkdir -p "$TEST_HOME" "$PLAYWRIGHT_BROWSERS_PATH"
+          env HOME="$TEST_HOME" npm ci
+
+      - name: Install locked Chromium
+        timeout-minutes: 5
+        run: env HOME="$TEST_HOME" ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run coordinator and popup tests
+        timeout-minutes: 3
+        run: env HOME="$TEST_HOME" npm test
