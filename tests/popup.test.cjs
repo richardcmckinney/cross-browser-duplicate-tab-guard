@@ -30,7 +30,7 @@ async function popup(t, options = {}) {
     const initialTab = { id: 712345, windowId: 83, active: true, title: options.title || "Project overview", url: "https://acme.example/project", incognito: Boolean(options.private) };
     const state = window.fixture = {
       tabs: options.noTab ? [] : [initialTab],
-      calls: [], copied: [], writes: [], deferredContext: [], deferredQuery: [], timers: [], events: {},
+      calls: [], copied: [], writes: [], deferredContext: [], deferredQuery: [], timers: [], events: {}, statusSequence: options.statusSequence ? options.statusSequence.map((status) => structuredClone(status)) : null,
       stored: { profileId: "test-profile", browserOverride: "", [key]: { schema: 1, enabled: true, pausedUntil: options.paused ? Date.now() + 600000 : 0, rules: [{ id: "rule-one", enabled: true, type: "host", pattern: "acme.example", browser: "all", context: "all", note: "Keep reference pages", createdAt: 1 }] } },
     };
     const event = (name) => ({ addListener(fn) { (state.events[name] ||= []).push(fn); } });
@@ -56,6 +56,7 @@ async function popup(t, options = {}) {
           if (message.type === "get_status") {
             if (options.status === "pending") return new Promise(() => {});
             if (options.status === "reject") throw new Error("Worker unavailable");
+            if (state.statusSequence && state.statusSequence.length) return state.statusSequence.shift();
             return { ok: true, browser: "chrome", browser_override: "auto", native_connected: false, incognito_allowed: true, file_scheme_allowed: true, profile_id: "test-profile", session_id: "test-worker-session" };
           }
           if (message.type === "get_active_tab_context") {
@@ -311,4 +312,58 @@ test("title change, removal and detachment invalidate a pending initial snapshot
       assert.equal(await page.locator("#copyTab").isEnabled(), false);
     }
   }
+});
+
+
+test("connection status recovers while popup stays open and preserves success notes", async (t) => {
+  const page = await popup(t, {
+    statusSequence: [
+      {
+        ok: true,
+        browser: "chrome",
+        browser_override: "auto",
+        native_connected: false,
+        native_error: "Native coordinator rejected profile key",
+        incognito_allowed: false,
+        file_scheme_allowed: false,
+        profile_id: "test-profile",
+        session_id: "worker-one",
+      },
+      {
+        ok: true,
+        browser: "chrome",
+        browser_override: "auto",
+        native_connected: true,
+        native_error: "",
+        incognito_allowed: false,
+        file_scheme_allowed: false,
+        profile_id: "test-profile",
+        session_id: "worker-two",
+      },
+      {
+        ok: true,
+        browser: "chrome",
+        browser_override: "auto",
+        native_connected: true,
+        native_error: "",
+        incognito_allowed: true,
+        file_scheme_allowed: true,
+        profile_id: "test-profile",
+        session_id: "worker-two",
+      },
+    ],
+  });
+  await page.waitForFunction(() => document.getElementById("connection").textContent === "Disconnected");
+  assert.equal(await page.locator("#note").textContent(), "Native coordinator rejected profile key");
+
+  await page.evaluate(() => fixture.timers[fixture.timers.length - 1]());
+  await page.waitForFunction(() => document.getElementById("connection").textContent === "Connected");
+  assert.equal(await page.locator("#note").textContent(), "Use Permissions to enable Allow in Incognito/Private and Allow access to file URLs.");
+
+  await page.locator("#addExact").click();
+  await page.waitForFunction(() => document.getElementById("note").textContent === "Exact URL excluded.");
+  await page.evaluate(() => fixture.timers[fixture.timers.length - 1]());
+  await page.waitForTimeout(20);
+  assert.equal(await page.locator("#connection").textContent(), "Connected");
+  assert.equal(await page.locator("#note").textContent(), "Exact URL excluded.");
 });

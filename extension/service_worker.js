@@ -3,7 +3,7 @@
 // CBDTG_EXCEPTIONS_PATCH_V1
 importScripts("exceptions.js");
 
-const VERSION = "2.4.0";
+const VERSION = "2.4.1";
 const NATIVE_HOST = "systems.venturi.duplicate_tab_guard";
 const FALLBACK_WS_URL = "ws://127.0.0.1:__WS_PORT__/__AUTH_TOKEN__";
 const BROWSERS = new Set(["brave", "chrome", "chromium"]);
@@ -30,6 +30,9 @@ let incognitoAllowed = false;
 let fileSchemeAllowed = false;
 let lastNativeError = "";
 let transportKind = "none";
+let transportGeneration = 0;
+let connectionAttempt = 0;
+const transportState = new WeakMap();
 
 const readyWaiters = [];
 const pendingRequests = new Map();
@@ -315,9 +318,28 @@ async function ensureIdentity() {
 function resolveReadyWaiters(error = null) {
   while (readyWaiters.length) {
     const waiter = readyWaiters.shift();
+    clearTimeout(waiter.timer);
     if (error) waiter.reject(error);
     else waiter.resolve();
   }
+}
+
+function isCurrentTransport(transport, generation) {
+  return !transport || (nativePort === transport && generation === transportGeneration);
+}
+
+function clearTransportTimer(transport) {
+  const state = transport && transportState.get(transport);
+  if (!state) return;
+  clearTimeout(state.handshakeTimer);
+  state.handshakeTimer = null;
+  transportState.delete(transport);
+}
+
+function cancelReconnect() {
+  if (!reconnectTimer) return;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
 }
 
 function scheduleReconnect() {
@@ -351,17 +373,24 @@ function helloPayload() {
   };
 }
 
-function clearCurrentTransport(errorMessage, rejectPending = true) {
+function clearCurrentTransport(errorMessage, rejectPending = true, rejectWaiters = true) {
   lastNativeError = errorMessage || "The local tab coordinator disconnected.";
+  transportGeneration += 1;
   nativeReady = false;
   nativePort = null;
   nativeConnecting = false;
   transportKind = "none";
+  if (snapshotTimer) {
+    clearInterval(snapshotTimer);
+    snapshotTimer = null;
+  }
   if (rejectPending) rejectPendingRequests(lastNativeError);
+  if (rejectWaiters) resolveReadyWaiters(new Error(lastNativeError));
 }
 
 async function connectWebSocket() {
   if (nativeReady || nativeConnecting || nativePort) return;
+  const attempt = ++connectionAttempt;
   nativeConnecting = true;
   try {
     await ensureIdentity();
@@ -377,73 +406,90 @@ async function connectWebSocket() {
         try { socket.close(1000, "extension reconnect"); } catch (_) {}
       },
     };
+    const generation = ++transportGeneration;
     nativePort = adapter;
     transportKind = "websocket";
-    lastNativeError = "";
 
     const handshakeTimer = setTimeout(() => {
-      if (!nativeReady && nativePort === adapter) {
-        try { socket.close(); } catch (_) {}
-      }
+      if (!isCurrentTransport(adapter, generation) || nativeReady) return;
+      clearTransportTimer(adapter);
+      const error = opened
+        ? "The loopback coordinator did not complete its handshake."
+        : "The loopback coordinator did not open a connection.";
+      clearCurrentTransport(error, true, true);
+      try { socket.close(); } catch (_) {}
+      connectNative().catch(() => scheduleReconnect());
     }, 5_000);
+    transportState.set(adapter, { handshakeTimer });
 
     socket.addEventListener("open", () => {
+      if (!isCurrentTransport(adapter, generation)) return;
       opened = true;
       try { adapter.postMessage(helloPayload()); } catch (_) {}
     });
     socket.addEventListener("message", (event) => {
+      if (!isCurrentTransport(adapter, generation)) return;
       try {
-        handleNativeMessage(JSON.parse(String(event.data || "{}"))).catch(() => {});
+        handleNativeMessage(JSON.parse(String(event.data || "{}")), adapter, generation).catch(() => {});
       } catch (_) {
         lastNativeError = "The loopback coordinator returned invalid JSON.";
       }
     });
     socket.addEventListener("error", () => {
+      if (!isCurrentTransport(adapter, generation)) return;
       lastNativeError = "The loopback coordinator could not be reached.";
     });
     socket.addEventListener("close", () => {
-      clearTimeout(handshakeTimer);
-      if (nativePort !== adapter) return;
+      if (!isCurrentTransport(adapter, generation)) return;
+      clearTransportTimer(adapter);
       clearCurrentTransport(
         lastNativeError || (opened ? "The loopback coordinator disconnected." : "The loopback coordinator is not running."),
-        nativeReady,
+        true,
+        true,
       );
-      scheduleReconnect();
+      connectNative().catch(() => scheduleReconnect());
     });
   } catch (error) {
-    clearCurrentTransport(error && error.message ? error.message : String(error), false);
-    scheduleReconnect();
+    if (attempt === connectionAttempt) {
+      clearCurrentTransport(error && error.message ? error.message : String(error), true, true);
+      scheduleReconnect();
+    }
   } finally {
-    nativeConnecting = false;
+    if (attempt === connectionAttempt) nativeConnecting = false;
   }
 }
 
 async function connectNative() {
   if (nativeReady || nativeConnecting || nativePort) return;
+  const attempt = ++connectionAttempt;
   nativeConnecting = true;
   try {
     await ensureIdentity();
     const port = chrome.runtime.connectNative(NATIVE_HOST);
+    const generation = ++transportGeneration;
     nativePort = port;
     transportKind = "native";
     nativeReady = false;
-    lastNativeError = "";
 
     const handshakeTimer = setTimeout(() => {
-      if (!nativeReady && nativePort === port) {
-        try { port.disconnect(); } catch (_) {}
-      }
+      if (!isCurrentTransport(port, generation) || nativeReady) return;
+      clearTransportTimer(port);
+      const error = "The native coordinator did not complete its handshake.";
+      clearCurrentTransport(error, true, true);
+      try { port.disconnect(); } catch (_) {}
+      connectWebSocket().catch(() => scheduleReconnect());
     }, 5_000);
+    transportState.set(port, { handshakeTimer });
 
     port.onMessage.addListener((message) => {
-      handleNativeMessage(message).catch(() => {});
+      if (!isCurrentTransport(port, generation)) return;
+      handleNativeMessage(message, port, generation).catch(() => {});
     });
     port.onDisconnect.addListener(() => {
-      clearTimeout(handshakeTimer);
-      if (nativePort !== port) return;
+      if (!isCurrentTransport(port, generation)) return;
+      clearTransportTimer(port);
       const error = chrome.runtime.lastError && chrome.runtime.lastError.message;
-      const wasReady = nativeReady;
-      clearCurrentTransport(error || "The native coordinator disconnected.", wasReady);
+      clearCurrentTransport(error || "The native coordinator disconnected.", true, true);
       // Native messaging can be unavailable in confined Snap/Flatpak browsers;
       // the installed loopback WebSocket service is the compatibility fallback.
       connectWebSocket().catch(() => scheduleReconnect());
@@ -451,23 +497,26 @@ async function connectNative() {
 
     port.postMessage(helloPayload());
   } catch (error) {
-    clearCurrentTransport(error && error.message ? error.message : String(error), false);
-    connectWebSocket().catch(() => scheduleReconnect());
+    if (attempt === connectionAttempt) {
+      clearCurrentTransport(error && error.message ? error.message : String(error), true, true);
+      connectWebSocket().catch(() => scheduleReconnect());
+    }
   } finally {
-    nativeConnecting = false;
+    if (attempt === connectionAttempt) nativeConnecting = false;
   }
 }
 function waitForNativeReady(timeoutMs = REQUEST_TIMEOUT_MS) {
   if (nativeReady && nativePort) return Promise.resolve();
   connectNative().catch(() => {});
   return new Promise((resolve, reject) => {
-    const entry = { resolve, reject };
-    readyWaiters.push(entry);
-    setTimeout(() => {
+    const entry = { resolve, reject, timer: null };
+    entry.timer = setTimeout(() => {
       const index = readyWaiters.indexOf(entry);
-      if (index >= 0) readyWaiters.splice(index, 1);
+      if (index < 0) return;
+      readyWaiters.splice(index, 1);
       reject(new Error(lastNativeError || "The local tab coordinator is not ready."));
     }, timeoutMs);
+    readyWaiters.push(entry);
   });
 }
 
@@ -475,14 +524,15 @@ async function sendNativeRequest(type, payload = {}, timeoutMs = REQUEST_TIMEOUT
   await waitForNativeReady(timeoutMs);
   if (!nativePort) throw new Error("The local tab coordinator is unavailable.");
   const requestId = randomId();
+  const transport = nativePort;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pendingRequests.delete(requestId);
       reject(new Error("The local tab coordinator did not respond in time."));
     }, timeoutMs);
-    pendingRequests.set(requestId, { resolve, reject, timer });
+    pendingRequests.set(requestId, { resolve, reject, timer, transport });
     try {
-      nativePort.postMessage({ type, request_id: requestId, ...payload });
+      transport.postMessage({ type, request_id: requestId, ...payload });
     } catch (error) {
       clearTimeout(timer);
       pendingRequests.delete(requestId);
@@ -500,12 +550,14 @@ function sendNativeEvent(type, payload = {}) {
   }
 }
 
-async function handleNativeMessage(message) {
-  if (!message || typeof message !== "object") return;
+async function handleNativeMessage(message, transport = null, generation = null) {
+  if (!message || typeof message !== "object" || (transport && !isCurrentTransport(transport, generation))) return;
   if (message.type === "hello_ack") {
+    clearTransportTimer(transport);
     if (BROWSERS.has(message.browser)) runtimeBrowser = message.browser;
     if (message.transport === "native" || message.transport === "websocket") transportKind = message.transport;
     nativeReady = true;
+    lastNativeError = "";
     reconnectDelayMs = 500;
     resolveReadyWaiters();
     await restorePendingIncidents();
@@ -514,8 +566,25 @@ async function handleNativeMessage(message) {
     return;
   }
 
+  if (message.type === "fatal") {
+    const detail = [message.error, message.message, message.reason]
+      .map((value) => typeof value === "string" ? value.trim() : "")
+      .find(Boolean) || "The local tab coordinator reported a fatal error.";
+    const current = nativePort;
+    const kind = transportKind;
+    clearTransportTimer(current);
+    clearCurrentTransport(detail, true, true);
+    if (current && typeof current.disconnect === "function") {
+      try { current.disconnect(); } catch (_) {}
+    }
+    if (kind === "native") connectWebSocket().catch(() => scheduleReconnect());
+    else scheduleReconnect();
+    return;
+  }
+
   if (message.request_id && pendingRequests.has(message.request_id)) {
     const pending = pendingRequests.get(message.request_id);
+    if (transport && pending.transport !== transport) return;
     pendingRequests.delete(message.request_id);
     clearTimeout(pending.timer);
     if (message.ok === false) pending.reject(new Error(message.error || "Coordinator request failed."));
@@ -1139,7 +1208,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const value = String(message.value || "auto").toLowerCase();
     const stored = BROWSERS.has(value) ? value : "";
     chrome.storage.local.set({ browserOverride: stored }).then(() => {
-      if (nativePort) nativePort.disconnect();
+      const priorPort = nativePort;
+      cancelReconnect();
+      if (priorPort) {
+        clearTransportTimer(priorPort);
+        clearCurrentTransport("Browser identity changed; reconnecting.", true, true);
+        try { priorPort.disconnect(); } catch (_) {}
+      }
       runtimeBrowser = stored || runtimeBrowser;
       sessionId = randomId();
       connectNative().catch(() => {});

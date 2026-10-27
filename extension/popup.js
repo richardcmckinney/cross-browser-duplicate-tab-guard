@@ -66,11 +66,14 @@ let settingsLoaded = false;
 let browserIdentity = "";
 let guardIdentity = {};
 let copyResetTimer = null;
+let statusNoteState = "";
 let copyingTab = false;
 
-function setNote(message, kind = "") {
+function setNote(message, kind = "", source = "user") {
   noteEl.textContent = String(message || "");
   noteEl.className = `note ${kind}`.trim();
+  noteEl.dataset.source = source;
+  statusNoteState = source === "status" ? noteEl.textContent : "";
 }
 
 function formatRemaining(timestamp) {
@@ -358,7 +361,9 @@ async function loadSettings() {
     }
     if (labels[stored.browserOverride] && stored.browserOverride !== "all") browserIdentity = stored.browserOverride;
     if (stored.profileId) guardIdentity.profile_id = stored.profileId;
-    overrideEl.value = stored.browserOverride || "auto";
+    if (document.activeElement !== overrideEl && !overrideEl.disabled) {
+      overrideEl.value = stored.browserOverride || "auto";
+    }
     renderActiveContext();
   } catch (error) {
     setNote("Could not read saved settings: " + error.message, "error");
@@ -374,25 +379,32 @@ async function refreshStatus() {
     connectionEl.textContent = status.native_connected ? "Connected" : "Disconnected";
     connectionEl.className = "pill " + (status.native_connected ? "ok" : "error");
     browserIdentity = status.browser || browserIdentity;
-    guardIdentity = { profile_id: status.profile_id || guardIdentity.profile_id, session_id: status.session_id };
+    guardIdentity = {
+      profile_id: status.profile_id || guardIdentity.profile_id,
+      session_id: status.session_id || guardIdentity.session_id,
+    };
     browserEl.textContent = labels[browserIdentity] || "Unknown";
     incognitoEl.textContent = status.incognito_allowed ? "Allowed" : "Enable in permissions";
     filesEl.textContent = status.file_scheme_allowed ? "Allowed" : "Enable in permissions";
     pendingEl.textContent = String(status.pending_incidents || 0);
-    overrideEl.value = status.browser_override || "auto";
+    if (document.activeElement !== overrideEl && !overrideEl.disabled) {
+      overrideEl.value = status.browser_override || "auto";
+    }
     renderActiveContext();
-    if (!status.incognito_allowed || !status.file_scheme_allowed) {
-      setNote("Use Permissions to enable Allow in Incognito/Private and Allow access to file URLs.");
-    } else if (!status.native_connected) {
-      setNote(status.native_error || "The local tab coordinator is disconnected.", "error");
-    } else if (!noteEl.textContent || noteEl.classList.contains("error")) {
-      setNote("Exact-URL coordination is active. Exception rules are stored locally in this browser profile.");
+    if (!status.native_connected) {
+      setNote(status.native_error || "The local tab coordinator is disconnected.", "error", "status");
+    } else if (!status.incognito_allowed || !status.file_scheme_allowed) {
+      if (!noteEl.textContent || statusNoteState === noteEl.textContent) {
+        setNote("Use Permissions to enable Allow in Incognito/Private and Allow access to file URLs.", "", "status");
+      }
+    } else if (!noteEl.textContent || statusNoteState === noteEl.textContent) {
+      setNote("Exact-URL coordination is active. Exception rules are stored locally in this browser profile.", "", "status");
     }
   } catch (error) {
     if (revision !== statusRevision) return;
     connectionEl.textContent = "Unavailable";
     connectionEl.className = "pill error";
-    setNote(error && error.message ? error.message : String(error), "error");
+    setNote(error && error.message ? error.message : String(error), "error", "status");
   }
 }
 
@@ -668,8 +680,11 @@ function handleTabUnavailable(tabId, windowId) {
 chrome.tabs.onRemoved.addListener((tabId, info) => handleTabUnavailable(tabId, info && info.windowId));
 chrome.tabs.onDetached.addListener((tabId, info) => handleTabUnavailable(tabId, info && info.oldWindowId));
 
-// Only the time-dependent guard text changes on this timer. No storage writes or rule rebuilds.
-statusRefreshTimer = setInterval(renderGuardState, 15000);
+// Poll the worker while the popup is open so transport recovery is visible without reopening it.
+statusRefreshTimer = setInterval(() => {
+  renderGuardState();
+  refreshStatus();
+}, 15000);
 
 window.addEventListener("unload", () => {
   clearInterval(statusRefreshTimer);

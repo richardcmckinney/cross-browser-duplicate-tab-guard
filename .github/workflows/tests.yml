@@ -3,6 +3,8 @@ name: Coordinator and popup tests
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -10,7 +12,7 @@ permissions:
 
 jobs:
   tests:
-    if: github.repository == 'richardcmckinney/cross-browser-duplicate-tab-guard' && github.ref == 'refs/heads/main'
+    if: github.repository == 'richardcmckinney/cross-browser-duplicate-tab-guard' && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
