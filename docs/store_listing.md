@@ -3,7 +3,7 @@
 ## 1. Extension Details
 - **Name**: Cross-Browser Duplicate Tab Guard
 - **Short Name**: Tab Guard
-- **Version**: 2.3.0
+- **Version**: 2.4.1
 - **Category**: Productivity / Workflow & Planning
 - **Primary Language**: English
 - **Supported Platforms**: Chrome, Brave, Chromium (macOS & Linux)
@@ -13,25 +13,25 @@
 ## 2. Store Copy & Descriptions
 
 ### Short Description (Max 132 Characters)
-> Prevent duplicate tabs across Chrome, Brave, and Chromium. Coordinates open URLs locally with customizable domain exceptions.
+> Stops exact-URL duplicate tabs across Chrome, Brave and Chromium, with editable exceptions. Needs the free local companion app.
 
 ### Detailed Description (Markdown / Store Formatted)
 ```markdown
 Cross-Browser Duplicate Tab Guard coordinates open tab state across Google Chrome, Brave, and Chromium, preventing accidental duplicate tabs across multiple windows and browsers.
 
-When you navigate to a URL that is already open in another window or browser, Tab Guard intercepts the navigation and presents an elegant, non-intrusive in-page modal informing you where the pre-existing tab is located (e.g., "Already open in Brave"). You can choose to instantly jump to the existing tab, keep the new tab open, or exclude the domain from future checks.
+When you navigate to an exact URL that is already open in another window or browser, Tab Guard presents a chooser identifying the existing copies (for example, "Already open in Brave"). Choose which browser should retain the single live copy; the other exact-URL copies close after confirmation. Configure URL and domain exceptions separately in the extension popup.
 
 KEY FEATURES:
 • Cross-Browser Coordination: Synchronizes tab states across Chrome, Brave, and Chromium via a lightweight local native messaging daemon.
-• Closed Shadow DOM Dialogs: In-page duplicate modals use isolated closed Shadow DOM containers to prevent website style bleed or script interference.
+• Closed Shadow DOM Dialogs: In-page duplicate modals use closed Shadow DOM containers to isolate their styling from the website.
 • Powerful Exception Engine: Easily whitelist websites by exact URL, domain, wildcard, or regular expression with in-memory memoized matching.
-• Local-First & Zero Telemetry: 100% of coordination occurs locally on your machine over Unix domain sockets and loopback WebSockets (127.0.0.1). Zero remote telemetry, zero tracking, and no external server requests.
-• Incognito & Private Support: Split context support allows private tabs to be managed safely without leaking browsing history across profiles.
+• Local-First & Zero Telemetry: Coordination uses native messaging and local Unix domain sockets. The Web Store build requires the free local companion app and does not use a loopback WebSocket fallback. Zero remote telemetry, zero tracking, and no external server requests for coordination.
+• Incognito & Private Support: Enable the extension in private/incognito windows to include their tabs in duplicate detection. The chooser can display matching regular and private tabs across connected browser profiles.
 
 SETUP:
-1. Load this extension in your Chromium-based browser(s).
-2. Run the lightweight local companion coordinator daemon.
-3. Enjoy duplicate-free browsing across your entire desktop workflow!
+1. Install this extension in your supported browser(s).
+2. Install the free local companion from the project repository. Native messaging must be available in each browser.
+3. Confirm the companion connection in the extension popup and configure any exceptions.
 ```
 
 ---
@@ -41,7 +41,7 @@ SETUP:
 | Permission | Justification for Chrome Web Store Reviewers |
 | :--- | :--- |
 | `tabs` | Required to query open tab URLs across the browser to detect duplicates and switch focus to an existing tab upon user confirmation. |
-| `webNavigation` | Required to detect URL navigations at `onBeforeNavigate` and `onCommitted` before rendering, enabling early duplicate interception. |
+| `webNavigation` | Required to detect committed navigations, history-state changes, and fragment changes so exact-URL duplicates can be checked after navigation. |
 | `storage` | Required to store user-configured URL exception rules, whitelist patterns, and pause durations locally on the device. |
 | `alarms` | Required for periodic background service worker heartbeats to maintain connectivity with the local coordinator daemon across sleep/wake transitions. |
 | `nativeMessaging` | Required for bidirectional communication with the local coordinator daemon on the host machine to coordinate tab state across browser families. |
@@ -50,8 +50,8 @@ SETUP:
 
 ## 4. Privacy & Data Handling Declarations
 - **Single Purpose**: Cross-browser tab deduplication and window navigation.
-- **Data Collection**: No user data, browsing history, or personal information is collected, stored remotely, or transmitted to any third party.
-- **Network Boundaries**: The extension communicates exclusively with `localhost` (`127.0.0.1`) over native messaging and local loopback sockets.
+- **Data Collection**: Tab URLs, titles, and browser context are processed locally for duplicate detection. They are not sent to remote servers or third parties.
+- **Network Boundaries**: The Web Store extension communicates with the installed native messaging host, which connects to the local coordinator over a Unix domain socket. The published package has no loopback WebSocket fallback. Authenticated loopback WebSocket support belongs only to the installer-rendered unpacked build.
 
 ---
 
