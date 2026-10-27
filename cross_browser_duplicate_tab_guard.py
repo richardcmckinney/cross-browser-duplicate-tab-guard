@@ -47,6 +47,9 @@ APP_VERSION = "2.4.0"
 HOST_NAME = "systems.venturi.duplicate_tab_guard"
 EXTENSION_ID = "ealdapdhgkonfamgboejhjaniepdjihk"
 EXTENSION_ORIGIN = f"chrome-extension://{EXTENSION_ID}/"
+STORE_EXTENSION_IDS: tuple[str, ...] = ("dbfkmbhkefkppdbbiifihekopelgcdgb",)
+ALLOWED_EXTENSION_IDS: tuple[str, ...] = (EXTENSION_ID,) + tuple(item for item in STORE_EXTENSION_IDS if item != EXTENSION_ID)
+ALLOWED_EXTENSION_ORIGINS: tuple[str, ...] = tuple(f"chrome-extension://{item}/" for item in ALLOWED_EXTENSION_IDS)
 DEFAULT_WS_PORT = 49473
 MAX_MESSAGE_BYTES = 16 * 1024 * 1024
 MAX_URL_CHARS = 131_072
@@ -277,7 +280,7 @@ def native_manifest_payload() -> str:
         "description": "Local in-memory coordinator for Cross-Browser Duplicate Tab Guard",
         "path": str(installed_script_path()),
         "type": "stdio",
-        "allowed_origins": [EXTENSION_ORIGIN],
+        "allowed_origins": list(ALLOWED_EXTENSION_ORIGINS),
     }
     return json.dumps(payload, indent=2) + "\n"
 
@@ -685,7 +688,7 @@ class Coordinator:
 
     def register_client(self, sender: Callable[[dict[str, Any]], bool], message: dict[str, Any], transport: str) -> Optional[ClientSession]:
         extension_id = self._clean_string(message.get("extension_id"), 64)
-        if extension_id != EXTENSION_ID:
+        if extension_id not in ALLOWED_EXTENSION_IDS:
             sender({"type": "fatal", "error": "Unrecognized extension identity."})
             return None
         supplied = self._clean_string(message.get("browser"), 32).lower()
@@ -1319,7 +1322,7 @@ class WebSocketCoordinatorHandler(CoordinatorHandlerMixin, socketserver.BaseRequ
                 self.request.sendall(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
                 return
             origin = headers.get("origin", "")
-            if origin and origin.rstrip("/") != EXTENSION_ORIGIN.rstrip("/"):
+            if origin and origin.rstrip("/") not in {item.rstrip("/") for item in ALLOWED_EXTENSION_ORIGINS}:
                 self.request.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
                 return
             key = headers.get("sec-websocket-key", "")
@@ -1993,7 +1996,8 @@ def self_test() -> int:
 
         manifest = json.loads(native_manifest_payload())
         assert manifest["name"] == HOST_NAME
-        assert manifest["allowed_origins"] == [EXTENSION_ORIGIN]
+        assert manifest["allowed_origins"] == list(ALLOWED_EXTENSION_ORIGINS)
+        assert manifest["allowed_origins"][0] == EXTENSION_ORIGIN
         assert Path(manifest["path"]).is_absolute()
 
     run_check("macOS/Linux browser distinctions and native-host paths", native_paths_and_launch_commands)
