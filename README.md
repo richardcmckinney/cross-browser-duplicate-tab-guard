@@ -8,9 +8,9 @@
 
 - **Current Tab Reference**: The popup immediately shows the active tab ID and title, with one-click copying of a readable browser/window/context reference. This works even when the local coordinator is disconnected.
 - **Cross-Browser State Coordination**: Synchronizes tab states across Chrome, Brave, and Chromium via local native messaging and Unix domain sockets (`/tmp/cbdtg-$UID/coordinator.sock` on Linux, persistent `Application Support` on macOS).
-- **Graceful Local Fallback**: Automatically falls back to a loopback WebSocket connection (`127.0.0.1:49473`) in sandboxed environments (such as Flatpak runtimes) where native messaging sockets are isolated.
+- **Native Messaging in the Web Store Build**: The published package requires the local companion and uses native messaging only. The installer-rendered unpacked build additionally supports an authenticated loopback WebSocket fallback when native messaging is unavailable; its port is configured during installation (default `127.0.0.1:49473`).
 - **Intelligent Duplicate Chooser**: When you navigate to a URL that is already open in another window or browser, an in-page modal appears informing you exactly where the pre-existing tab is located (e.g., *"Already open in Brave"*, *"Already open in another Chrome window"*), with color-coded browser indicators and window/tab IDs.
-- **Closed Shadow DOM Overlay**: In-page chooser modals use a closed Shadow DOM container (`attachShadow({ mode: "closed" })`) to prevent host page CSS/JavaScript collisions, styling bleed, or unauthorized inspection.
+- **Closed Shadow DOM Overlay**: In-page chooser modals use a closed Shadow DOM container (`attachShadow({ mode: "closed" })`) to isolate chooser styling from the host page. A closed shadow root is not a security boundary against the page.
 - **High-Performance Exception Caching**: URL exception patterns are parsed and cached in an internal regular expression memoization map, eliminating repeated regex recompilations during high-frequency tab navigation events.
 - **Full Privacy & Zero Data Exfiltration**: Runs 100% locally on your machine. Zero cloud telemetry, zero remote tracking, and no external API dependencies.
 
@@ -21,15 +21,15 @@
 The project consists of two core components:
 
 1. **Browser Extension (Manifest V3)**:
-   - `background / service_worker.js`: Handles tab navigation events, transient URL filtering, and bidirectional communication with the local coordinator.
+   - `service_worker.js`: Handles tab navigation events, transient URL filtering, and bidirectional communication with the local coordinator.
    - `content.js`: Injects the closed-shadow-DOM notification modal when a duplicate URL is detected.
-   - `chooser.html / chooser.js / chooser.css`: Interactive modal UI enabling you to switch to the existing tab, open anyway, or whitelist the domain.
-   - `exceptions.js`: Domain and URL matching logic for whitelists and ignored URL parameters.
+   - `chooser.html / chooser.js / chooser.css`: Fallback chooser page for selecting which browser retains the single live copy; the other exact-URL copies are closed after confirmation.
+   - `exceptions.js`: Exact URL, hostname, domain, wildcard, and regular-expression matching for rules configured in the popup. Duplicate detection compares the full URL, including query parameters and fragments.
    - `popup.html / popup.js / popup.css`: Browser action popup displaying daemon connection status and tab statistics.
 
 2. **Coordinator Daemon (`cross_browser_duplicate_tab_guard.py`)**:
    - Single-file Python coordinator daemon and native host bridge.
-   - Automatically registers Chrome Native Messaging manifests across all detected browser profiles.
+   - Registers Native Messaging host manifests in the supported browser installation locations.
    - Sets up user systemd service units (Linux) or launchd LaunchAgents (macOS) for automatic background startup.
 
 ---
@@ -53,19 +53,16 @@ The project consists of two core components:
    python3 cross_browser_duplicate_tab_guard.py install
    ```
 
-3. **Start the coordinator daemon**:
-   ```bash
-   python3 cross_browser_duplicate_tab_guard.py daemon --persistent &
-   ```
-   *(On macOS, the daemon is automatically managed via launchd; on Linux, via user systemd.)*
+The installer starts the coordinator and configures automatic startup through launchd on macOS or user systemd on Linux. The Web Store extension requires this companion installation too.
 
-4. **Load the Unpacked Extension in Your Browsers**:
+3. **Load the Unpacked Extension in Your Browsers**:
    - Open your browser's extension manager:
      - Chrome: `chrome://extensions`
      - Brave: `brave://extensions`
      - Chromium: `chrome://extensions`
    - Enable **Developer mode** (toggle in upper right).
-   - Click **Load unpacked** and select the `extension/` directory.
+   - Click **Load unpacked** and select the **Extension folder** printed by the installer. This rendered folder contains the local fallback configuration; the repository's `extension/` directory is source for packaging.
+   - For a Web Store installation, install the published extension instead of loading the unpacked build. Native messaging must be available in that browser; the Web Store build does not use the unpacked build's loopback fallback.
 
 ---
 
@@ -93,7 +90,7 @@ settings or exception matching. Countdown updates only repaint the guard status,
 controls and keyboard focus. Failed settings writes keep the last confirmed state, and clipboard
 fallback uses a temporary buffer without replacing an unfinished rules import.
 
-### Popup behavior checks
+### Automated behavior checks
 
 With Python and Node.js 20 or newer available, install the locked test dependency and Chromium once:
 
@@ -103,12 +100,13 @@ npx playwright install chromium
 npm test
 ```
 
-The aggregate command runs the coordinator self-test and every popup test. Missing dependencies
-or a missing Chromium browser fail the command. To run one suite, use
-`npm run test:coordinator` or `npm run test:popup`.
+The aggregate command runs the coordinator self-test, Web Store packaging checks, transport lifecycle
+checks, and popup tests. Missing dependencies or a missing Chromium browser fail the command.
+To run one suite, use `npm run test:coordinator`, `npm run test:webstore`,
+`npm run test:transport`, or `npm run test:popup`.
 
 Set PLAYWRIGHT_MODULE to the installed Playwright module path if it is outside the repository's
-module search path. The tests use mocked extension APIs and real popup rendering in Chromium,
+module search path. The popup tests use mocked extension APIs and real rendering in Chromium,
 covering unavailable status/settings, owning-window selection, stale replies, title updates,
 clipboard failure, private tabs, storage-write rollback and keyboard-focus preservation.
 They do not read or modify any user browser profile.
@@ -122,7 +120,16 @@ To build a clean, validated distribution archive ready for submission to the Chr
 ```bash
 python3 scripts/package_extension.py
 ```
-This validates the Manifest V3 structure, confirms all required icon dimensions (16px, 48px, 128px), strips development and OS artifacts (`.DS_Store`, `Thumbs.db`), and outputs `dist/cross-browser-duplicate-tab-guard-v<version>.zip`.
+This derives a native-messaging-only package, removes the developer key and loopback configuration,
+validates the manifest and its packaged resources, and checks that the declared 16px, 32px, 48px,
+and 128px icon files are present. It excludes known development and OS artifacts, rejects unexpected
+files and unsafe paths, and writes a deterministic
+`dist/cross-browser-duplicate-tab-guard-v<version>-webstore.zip`. The command prints the exact
+archive path, file count, size, and SHA-256 digest.
+
+Use `python3 scripts/package_extension.py --help` for options, including `--output-dir`.
+The source extension and installer-rendered unpacked build retain their local development transport;
+only the derived Web Store archive disables that fallback.
 
 See [docs/store_listing.md](docs/store_listing.md) for Chrome Web Store descriptions, categories, and permission justifications.
 
