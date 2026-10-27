@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -139,6 +140,18 @@ class WebStorePackageTests(unittest.TestCase):
                         self.source, self.output, ["test-loopback-token"]
                     )
                 shutil.copy2(EXTENSION_DIR / "manifest.json", manifest_path)
+
+    def test_packaging_help_does_not_build_or_mutate(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "package_extension.py"), "--help"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--output-dir", result.stdout)
+        self.assertNotIn("SHA-256:", result.stdout)
 
     def test_native_allowlist_contains_unpacked_and_store_ids(self) -> None:
         payload = json.loads(guard.native_manifest_payload())
