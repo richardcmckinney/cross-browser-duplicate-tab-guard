@@ -1,0 +1,52 @@
+# Gitleaks configuration for Cross-Browser Duplicate Tab Guard.
+#
+# Used by the pre-commit hook (.pre-commit-config.yaml) and by the secret-scan
+# workflow (.github/workflows/secret-scan.yml), so the same rules run locally and
+# before merge.
+
+title = "cross-browser-duplicate-tab-guard"
+
+[extend]
+useDefault = true
+
+# The installer renders __AUTH_TOKEN__ and __WS_PORT__ into the deployed extension
+# per host. A rendered token must never reach the repository; source keeps the
+# placeholders. GitHub's provider patterns do not recognise this generic token, so
+# the repository carries its own rule.
+[[rules]]
+id = "cbdtg-rendered-loopback-token"
+description = "Rendered coordinator token in the loopback WebSocket URL (source must keep __AUTH_TOKEN__)"
+regex = '''ws://127\.0\.0\.1:(?:[0-9]{2,5}|__WS_PORT__)/([A-Za-z0-9_-]{32,})'''
+secretGroup = 1
+keywords = ["ws://127.0.0.1"]
+
+[[rules]]
+id = "cbdtg-config-token"
+description = "Coordinator config.json token value"
+regex = '''"token"\s*:\s*"([A-Za-z0-9_-]{32,})"'''
+secretGroup = 1
+keywords = ["\"token\""]
+
+[[allowlists]]
+description = "Values that look like secrets to the generic rule but are not"
+regexes = [
+  # The extension's SPKI public key in manifest.json (and its embedded copy in the
+  # installer). It pins the extension ID and is public by design.
+  '''^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA[A-Za-z0-9+/=]+$''',
+  # A chrome.storage key name, not a credential.
+  '''^pending_duplicate_incidents_v[0-9]+$''',
+]
+
+[[allowlists]]
+description = "Rotated historical leak, kept in history on purpose"
+# These three commits (2026-09-30 to 2026-10-01) carried one host's rendered
+# loopback token in extension/service_worker.js. PR #3 (2026-10-06) restored the
+# placeholder and that host's token was rotated the same day. On 2026-10-29 both
+# deployed coordinators were verified to refuse the old value, so the public
+# history is left intact instead of being rewritten, and these commits are
+# allowlisted so the scan stays meaningful for everything after them.
+commits = [
+  "34b198ca1afb041cc2584bf4423fd55feff2f61f",
+  "4d073744bf6683025fd3cd6fafe31183c175ca6a",
+  "8ba13826bb9a3cf9b4187be7e8e1cbcfdc5c626a",
+]
