@@ -9,10 +9,14 @@ const choiceEl = document.getElementById("choice");
 const metaEl = document.getElementById("meta");
 const statusEl = document.getElementById("status");
 const confirmEl = document.getElementById("confirm");
+const pauseEl = document.getElementById("pause");
+const pauseDurationEl = document.getElementById("pause-duration");
 
 function setBusy(value) {
   confirmEl.disabled = Boolean(value);
   choiceEl.disabled = Boolean(value);
+  pauseEl.disabled = Boolean(value);
+  pauseDurationEl.disabled = Boolean(value);
 }
 
 function setStatus(message, kind = "") {
@@ -141,6 +145,24 @@ confirmEl.addEventListener("click", async () => {
   }
 });
 
+pauseEl.addEventListener("click", async () => {
+  if (!incident) return;
+  setBusy(true);
+  setStatus("Pausing duplicate handling…");
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "pause_duplicate",
+      incident_id: incident.incident_id,
+      minutes: Number(pauseDurationEl.value),
+    });
+    if (!response || !response.ok) throw new Error((response && response.error) || "The guard could not be paused.");
+    setStatus("Duplicate handling paused. Returning to your tab…", "success");
+  } catch (error) {
+    setBusy(false);
+    setStatus(error && error.message ? error.message : String(error), "error");
+  }
+});
+
 chrome.runtime.onMessage.addListener((message) => {
   if (!message || message.type !== "chooser_event" || message.tab_id !== tabId) return;
   setBusy(Boolean(message.busy));
@@ -151,3 +173,4 @@ load().catch((error) => {
   setBusy(true);
   setStatus(error && error.message ? error.message : String(error), "error");
 });
+

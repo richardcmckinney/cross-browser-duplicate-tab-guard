@@ -14,6 +14,13 @@ select:focus { outline: 3px solid rgba(80,101,232,.18); border-color: #5065e8; }
 .status.error { color: #b42318; }
 .status.success { color: #027a48; }
 .actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.pause-controls { margin-top: 18px; }
+.pause-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+button:focus-visible { outline: 3px solid rgba(80,101,232,.45); outline-offset: 2px; }
+@media (max-width: 440px) {
+  .shell { padding: 12px; }
+  .card { padding: 20px; }
+}
 button { min-height: 43px; padding: 10px 17px; border: 0; border-radius: 10px; background: #202633; color: #fff; font: inherit; font-weight: 750; cursor: pointer; }
 button:disabled, select:disabled { opacity: .58; cursor: wait; }
 .existing-banner {
@@ -89,3 +96,4 @@ button:disabled, select:disabled { opacity: .58; cursor: wait; }
   .banner-summary { color: #f0f6fc; }
   .copies-list { background: #20242c; color: #9da7b4; }
 }
+
