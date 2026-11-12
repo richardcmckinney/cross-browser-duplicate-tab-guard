@@ -3,7 +3,7 @@
 // CBDTG_EXCEPTIONS_PATCH_V1
 importScripts("exceptions.js");
 
-const VERSION = "2.4.1";
+const VERSION = "2.4.2";
 const NATIVE_HOST = "systems.venturi.duplicate_tab_guard";
 const FALLBACK_WS_URL = "ws://127.0.0.1:__WS_PORT__/__AUTH_TOKEN__";
 const BROWSERS = new Set(["brave", "chrome", "chromium"]);
@@ -12,6 +12,8 @@ const REQUEST_TIMEOUT_MS = 12_000;
 const TRANSFER_REQUEST_TIMEOUT_MS = 30_000;
 const SESSION_STORAGE_KEY = "pending_duplicate_incidents_v2";
 const EXCEPTION_SETTINGS_KEY = CBDTGExceptions.STORAGE_KEY;
+const PAUSE_EXPIRY_ALARM = "guard-pause-expiry";
+const PAUSE_DURATIONS_MINUTES = new Set([15, 60, 1440]);
 
 let exceptionSettings = CBDTGExceptions.defaultSettings();
 let exceptionSettingsPromise = null;
@@ -867,6 +869,40 @@ async function claimTab(tabId, url, source, force = false) {
   }
 }
 
+function schedulePauseExpiry() {
+  const operation = exceptionSettings.pausedUntil > now()
+    ? chrome.alarms.create(PAUSE_EXPIRY_ALARM, { when: exceptionSettings.pausedUntil })
+    : chrome.alarms.clear(PAUSE_EXPIRY_ALARM);
+  Promise.resolve(operation).catch((error) => console.warn("Could not schedule guard pause expiry:", error));
+}
+
+async function pauseDuplicate(tabId, incidentId, minutes) {
+  if (!Number.isInteger(tabId) || !PAUSE_DURATIONS_MINUTES.has(minutes)) {
+    throw new Error("Choose a pause duration of 15 minutes, 1 hour, or 24 hours.");
+  }
+  const incident = pendingIncidents.get(tabId);
+  if (!incident || incident.incident_id !== incidentId) {
+    throw new Error("This duplicate alert is no longer active.");
+  }
+  // Read strictly: a failed storage read must not replace existing exception rules.
+  const stored = await chrome.storage.local.get([EXCEPTION_SETTINGS_KEY]);
+  const tab = await matchingTab(tabId, incident.url);
+  if (!tab || pendingIncidents.get(tabId) !== incident ||
+      Boolean(tab.incognito) !== Boolean(chrome.extension.inIncognitoContext)) {
+    throw new Error("This duplicate alert is no longer active.");
+  }
+  const settings = CBDTGExceptions.normalizeSettings(stored[EXCEPTION_SETTINGS_KEY]);
+  const updated = { ...settings, pausedUntil: now() + minutes * 60000 };
+  await chrome.storage.local.set({ [EXCEPTION_SETTINGS_KEY]: updated });
+  exceptionSettings = updated;
+  exceptionSettingsPromise = Promise.resolve(updated);
+  schedulePauseExpiry();
+  // Cancel rather than resolve the incident: pausing must never close either copy.
+  await unregisterExcludedTab(tabId, { reason: "guard_paused" });
+  scheduleExceptionReconcile();
+  return { paused_until: updated.pausedUntil };
+}
+
 async function resolveDuplicate(tabId, incidentId, choice) {
   const incident = pendingIncidents.get(tabId);
   if (!incident || incident.incident_id !== incidentId) {
@@ -1128,6 +1164,14 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message !== "object") return false;
 
+  if (message.type === "pause_duplicate") {
+    const tabId = sender.tab && sender.tab.id;
+    pauseDuplicate(tabId, String(message.incident_id || ""), message.minutes)
+      .then((response) => sendResponse({ ok: true, ...response }))
+      .catch((error) => sendResponse({ ok: false, error: error && error.message ? error.message : String(error) }));
+    return true;
+  }
+
   if (message.type === "resolve_duplicate") {
     const tabId = sender.tab && sender.tab.id;
     resolveDuplicate(tabId, String(message.incident_id || ""), String(message.choice || ""))
@@ -1242,12 +1286,16 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local" || !changes[EXCEPTION_SETTINGS_KEY]) return;
   exceptionSettings = CBDTGExceptions.normalizeSettings(changes[EXCEPTION_SETTINGS_KEY].newValue);
   exceptionSettingsPromise = Promise.resolve(exceptionSettings);
+  schedulePauseExpiry();
   scheduleExceptionReconcile();
 });
 
 chrome.alarms.create("coordinator-health", { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm && alarm.name === "coordinator-health" && !nativeReady) connectNative().catch(() => {});
+  if (alarm && alarm.name === PAUSE_EXPIRY_ALARM) {
+    reconcileExceptionSettings().catch((error) => console.warn("Could not resume duplicate handling:", error));
+  }
 });
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -1258,4 +1306,5 @@ chrome.runtime.onStartup.addListener(() => {
   connectNative().catch(() => {});
 });
 
-ensureExceptionSettings().finally(() => connectNative().catch(() => {}));
+ensureExceptionSettings().then(schedulePauseExpiry).finally(() => connectNative().catch(() => {}));
+

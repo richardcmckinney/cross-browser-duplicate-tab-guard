@@ -2,17 +2,21 @@
 
 **Cross-Browser Duplicate Tab Guard** is an open-source, local-first browser extension and background coordinator daemon that detects, prevents, and manages duplicate tabs across multiple browser families (Google Chrome, Brave, and Chromium) on macOS and Linux.
 
+[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/cross-browser-duplicate-ta/dbfkmbhkefkppdbbiifihekopelgcdgb) · [Setup](#installation--setup) · [Troubleshooting](#troubleshooting) · [Contribute](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Privacy](docs/privacy.md) · [Security](SECURITY.md)
+
+**The local Python companion is required, including for the Web Store extension.** Supported targets are macOS and Linux with Chrome, Brave or Chromium. Windows and Firefox are not currently supported.
+
 ---
 
 ## Features
 
 - **Current Tab Reference**: The popup immediately shows the active tab ID and title, with one-click copying of a readable browser/window/context reference. This works even when the local coordinator is disconnected.
-- **Cross-Browser State Coordination**: Synchronizes tab states across Chrome, Brave, and Chromium via local native messaging and Unix domain sockets (`/tmp/cbdtg-$UID/coordinator.sock` on Linux, persistent `Application Support` on macOS).
+- **Cross-Browser State Coordination**: Synchronizes tab states across Chrome, Brave, and Chromium via local native messaging and a per-user Unix domain socket.
 - **Native Messaging in the Web Store Build**: The published package requires the local companion and uses native messaging only. The installer-rendered unpacked build additionally supports an authenticated loopback WebSocket fallback when native messaging is unavailable; its port is configured during installation (default `127.0.0.1:49473`).
 - **Intelligent Duplicate Chooser**: When you navigate to a URL that is already open in another window or browser, an in-page modal appears informing you exactly where the pre-existing tab is located (e.g., *"Already open in Brave"*, *"Already open in another Chrome window"*), with color-coded browser indicators and window/tab IDs.
 - **Closed Shadow DOM Overlay**: In-page chooser modals use a closed Shadow DOM container (`attachShadow({ mode: "closed" })`) to isolate chooser styling from the host page. A closed shadow root is not a security boundary against the page.
 - **High-Performance Exception Caching**: URL exception patterns are parsed and cached in an internal regular expression memoization map, eliminating repeated regex recompilations during high-frequency tab navigation events.
-- **Full Privacy & Zero Data Exfiltration**: Runs 100% locally on your machine. Zero cloud telemetry, zero remote tracking, and no external API dependencies.
+- **Local Data Handling**: No remote telemetry or cloud coordination service. Connected browser profiles share matching-tab context locally; optional private/incognito participation can expose matching private tabs in the chooser. See [privacy and data handling](docs/privacy.md) for storage, clipboard and removal details.
 
 ---
 
@@ -37,8 +41,10 @@ The project consists of two core components:
 ## Installation & Setup
 
 ### Prerequisites
+
 - Python 3.9+
-- One or more supported Chromium-based browsers: Google Chrome, Brave, or Chromium.
+- One or more supported Chromium-based browsers: Google Chrome, Brave, or Chromium, based on Chromium 116 or newer.
+- On Linux, a desktop user session with user systemd support for automatic startup. Browser sandboxing may restrict native messaging.
 
 ### Quick Start
 
@@ -62,7 +68,9 @@ The installer starts the coordinator and configures automatic startup through la
      - Chromium: `chrome://extensions`
    - Enable **Developer mode** (toggle in upper right).
    - Click **Load unpacked** and select the **Extension folder** printed by the installer. This rendered folder contains the local fallback configuration; the repository's `extension/` directory is source for packaging.
-   - For a Web Store installation, install the published extension instead of loading the unpacked build. Native messaging must be available in that browser; the Web Store build does not use the unpacked build's loopback fallback.
+   - For a Web Store installation, [install the published extension](https://chromewebstore.google.com/detail/cross-browser-duplicate-ta/dbfkmbhkefkppdbbiifihekopelgcdgb) instead of loading the unpacked build. Native messaging must be available in that browser; the Web Store build does not use the unpacked build's loopback fallback.
+
+Use one installation method per browser profile to avoid running both copies. Private/incognito windows and file URLs participate only if you enable the corresponding permissions on the extension's Details page. Private-tab participation is optional; read the [privacy implications](docs/privacy.md#private-browsing-and-file-access) first.
 
 ---
 
@@ -75,6 +83,14 @@ python3 cross_browser_duplicate_tab_guard.py doctor
 ```
 
 ---
+
+## Duplicate detection and pause controls
+
+Duplicate detection compares the full URL, including query parameters and fragments. The chooser identifies existing copies and lets you select the browser that should retain one live copy; confirming can close other exact-URL copies. Use harmless pages when trying it for the first time.
+
+Both the duplicate alert and the toolbar popup offer pauses of **15 minutes, one hour or 24 hours**. In the duplicate alert, select a duration and choose **Pause** to keep the current copies open and dismiss the alert; the fallback chooser returns to the original page. Use **Resume** in the toolbar popup to end a pause early.
+
+Pause applies to the current browser profile's guard. It does not suspend page execution or pause every connected browser. Saved exception rules are retained, and duplicate detection resumes when the selected duration expires. Use the enabled switch to disable guarding until you turn it back on.
 
 ## Current tab reference
 
@@ -100,9 +116,9 @@ npx playwright install chromium
 npm test
 ```
 
-The aggregate command runs the coordinator self-test, Web Store packaging checks, transport lifecycle
+The aggregate command runs the coordinator self-test and regression tests, Web Store packaging checks, transport lifecycle
 checks, and popup tests. Missing dependencies or a missing Chromium browser fail the command.
-To run one suite, use `npm run test:coordinator`, `npm run test:webstore`,
+To run one suite, use `npm run test:coordinator`, `npm run test:regressions`, `npm run test:webstore`,
 `npm run test:transport`, or `npm run test:popup`.
 
 Set PLAYWRIGHT_MODULE to the installed Playwright module path if it is outside the repository's
@@ -131,9 +147,46 @@ Use `python3 scripts/package_extension.py --help` for options, including `--outp
 The source extension and installer-rendered unpacked build retain their local development transport;
 only the derived Web Store archive disables that fallback.
 
-See [docs/store_listing.md](docs/store_listing.md) for Chrome Web Store descriptions, categories, and permission justifications.
+See [the release checklist](docs/releasing.md) for validation, submission and post-publication checks, and [store listing copy](docs/store_listing.md) for descriptions and permission justifications. Building an archive or merging a change does not publish a store update.
 
 ---
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| Popup says the companion is disconnected | Run `doctor` from the cloned repository, confirm the companion installation completed, then reload the extension. The store build requires native messaging; it cannot use the unpacked build's WebSocket fallback. |
+| Snap/Flatpak browser cannot connect | Browser confinement can block native-host execution. Check the browser's native-messaging support and the `doctor` results. An installer-rendered unpacked build supports the authenticated local fallback. |
+| A duplicate produces no chooser | Check that guarding is enabled, the pause has expired, no exception matches, and both browser profiles are connected. Exact URLs must match. |
+| Private or local-file tab is ignored | Confirm the corresponding browser-controlled extension permission is enabled, if you want that context included. |
+| Chooser becomes a separate extension page | Some pages prohibit content scripts; the fallback chooser handles those cases. |
+| A copied tab reference no longer works | Tab/window IDs are browser-scoped and can change after tabs close or browsers restart. Copy a fresh reference. |
+
+For a bug report, include versions, install method and minimal reproduction steps. Use [the issue form](https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard/issues/new/choose) and remove private URLs, titles and tokens. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## Updating and removing
+
+To update an unpacked installation, update the cloned source and rerun the installer, then reload the extension in each browser:
+
+```bash
+git pull --ff-only
+python3 cross_browser_duplicate_tab_guard.py install
+python3 cross_browser_duplicate_tab_guard.py doctor
+```
+
+Web Store extension updates are distributed through the browser; update the local companion separately when needed. After updating, verify the installed versions and connection status.
+
+To remove the companion:
+
+```bash
+python3 cross_browser_duplicate_tab_guard.py uninstall
+```
+
+Remove the extension separately from each browser's extension manager. The companion's operational logs and any manually exported files are retained; see [local files and removal](docs/privacy.md#local-files-and-removal).
+
+## Contributing and support
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, repository layout and the review workflow. Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

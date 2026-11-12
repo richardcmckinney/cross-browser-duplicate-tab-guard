@@ -27,6 +27,18 @@
       </select>
       <div id="meta" class="meta"></div>
       <p id="status" class="status" aria-live="polite"></p>
+      <div class="pause-controls">
+        <label for="pause-duration">Pause duplicate handling</label>
+        <div class="pause-row">
+          <select id="pause-duration" aria-describedby="pause-help">
+            <option value="15">15 minutes</option>
+            <option value="60" selected>1 hour</option>
+            <option value="1440">24 hours</option>
+          </select>
+          <button id="pause" type="button">Pause</button>
+        </div>
+        <p id="pause-help" class="meta">Keep these tabs open and pause the guard in this browser profile.</p>
+      </div>
       <div class="actions">
         <button id="confirm" type="button">Keep selected copy</button>
       </div>
@@ -35,3 +47,4 @@
   <script src="chooser.js"></script>
 </body>
 </html>
+

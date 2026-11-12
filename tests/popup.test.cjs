@@ -16,6 +16,9 @@ after(async () => { if (browser) await browser.close(); });
 async function popup(t, options = {}) {
   const context = await browser.newContext({ viewport: { width: 390, height: 600 }, colorScheme: options.dark ? "dark" : "light" });
   t.after(() => context.close());
+  if (options.clipboard === "native") {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: "https://guard-test.example" });
+  }
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -38,12 +41,14 @@ async function popup(t, options = {}) {
     window.setInterval = (fn) => { state.timers.push(fn); return state.timers.length; };
     window.clearInterval = () => {};
     Object.defineProperty(navigator, "userAgentData", { value: { brands: [{ brand: "Google Chrome" }, { brand: "Chromium" }] } });
-    Object.defineProperty(navigator, "clipboard", { value: {
-      writeText: async (text) => {
-        if (options.clipboard !== "reject") { state.copied.push(text); return; }
-        throw new Error("Clipboard denied");
-      },
-    } });
+    if (options.clipboard !== "native") {
+      Object.defineProperty(navigator, "clipboard", { value: {
+        writeText: async (text) => {
+          if (options.clipboard !== "reject") { state.copied.push(text); return; }
+          throw new Error("Clipboard denied");
+        },
+      } });
+    }
     document.execCommand = (command) => {
       if (command !== "copy" || options.fallback === false) return false;
       state.copied.push(document.activeElement.value);
@@ -103,7 +108,13 @@ test("ID and title render while both status and settings are unresolved", async 
   assert.deepEqual(await page.evaluate(() => fixture.calls.find((call) => call.query).query), { active: true, currentWindow: true });
   await page.locator("#copyTab").click();
   const copied = await page.evaluate(() => fixture.copied[0]);
-  assert.match(copied, /^Tab ID: 712345\nBrowser: Chrome\nWindow ID \(browser API\): 83/m);
+  assert.equal(copied, [
+    "Tab ID: 712345",
+    "Browser: Chrome",
+    "Window ID (browser API): 83",
+    "Context: Regular",
+    "Title: Project overview",
+  ].join("\n"));
 });
 
 test("disconnected worker still permits copying private tab reference", async (t) => {
@@ -119,9 +130,31 @@ test("copy adds scoped Guard identity without mislabelling it as browser session
   await page.waitForFunction(() => document.getElementById("connection").textContent === "Disconnected");
   await page.locator("#copyTab").click();
   const text = await page.evaluate(() => fixture.copied[0]);
-  assert.match(text, /Guard profile ID: test-profile/);
-  assert.match(text, /Guard session ID: test-worker-session \(extension worker lifetime, not browser session\)/);
-  assert.match(text, /browser-scoped, not OS window IDs/);
+  assert.equal(text, [
+    "Tab ID: 712345",
+    "Browser: Chrome",
+    "Window ID (browser API): 83",
+    "Context: Regular",
+    "Title: Project overview",
+    "Guard profile ID: test-profile",
+    "Guard session ID: test-worker-session (extension worker lifetime, not browser session)",
+  ].join("\n"));
+});
+
+test("copy button writes only the tab reference to the native Chromium clipboard", async (t) => {
+  const page = await popup(t, { clipboard: "native", private: true, title: "Design notes — café" });
+  await page.waitForFunction(() => document.getElementById("connection").textContent === "Disconnected");
+  await page.locator("#copyTab").click();
+  await page.waitForFunction(() => document.getElementById("copyTabLabel").textContent === "Copied");
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), [
+    "Tab ID: 712345",
+    "Browser: Chrome",
+    "Window ID (browser API): 83",
+    "Context: Private / incognito",
+    "Title: Design notes — café",
+    "Guard profile ID: test-profile",
+    "Guard session ID: test-worker-session (extension worker lifetime, not browser session)",
+  ].join("\n"));
 });
 
 test("activation fixes window scope and discards stale exception replies", async (t) => {
@@ -366,4 +399,43 @@ test("connection status recovers while popup stays open and preserves success no
   await page.waitForTimeout(20);
   assert.equal(await page.locator("#connection").textContent(), "Connected");
   assert.equal(await page.locator("#note").textContent(), "Exact URL excluded.");
+});
+
+test("oversized imports are rejected without writes and valid imports retain their pattern", async (t) => {
+  for (const mode of ["merge", "replace"]) {
+    await t.test(mode, async (t) => {
+      const page = await popup(t);
+      await page.waitForFunction(() => document.querySelectorAll(".rule-item").length === 1);
+      await page.locator(".transfer-panel > summary").click();
+      await page.locator("#showImport").click();
+      await page.locator("#importMode").selectOption(mode);
+      const invalid = JSON.stringify([{ type: "exact", pattern: "a".repeat(4097) }]);
+      await page.locator("#importText").fill(invalid);
+      await page.locator("#applyImport").click();
+      await page.waitForFunction(() => document.getElementById("note").textContent.includes("4096"));
+      assert.equal(await page.evaluate(() => fixture.writes.length), 0);
+      assert.equal(await page.locator("#importText").inputValue(), invalid);
+      assert.equal(await page.locator(".rule-item").count(), 1);
+
+      const pattern = "https://valid.example.test/path?keep=exact#fragment";
+      await page.locator("#importText").fill(JSON.stringify([{ type: "exact", pattern }]));
+      await page.locator("#applyImport").click();
+      await page.waitForFunction(() => fixture.writes.length === 1);
+      const stored = await page.evaluate(() => fixture.stored.duplicateTabGuardExceptionSettingsV1);
+      assert.equal(stored.rules.length, mode === "merge" ? 2 : 1);
+      assert.equal(stored.rules.at(-1).pattern, pattern);
+      assert.equal(stored.rules.at(-1).type, "exact");
+    });
+  }
+});
+
+test("saving an oversized exception rejects it without writing a truncated rule", async (t) => {
+  const page = await popup(t);
+  await page.waitForFunction(() => document.querySelectorAll(".rule-item").length === 1);
+  await page.locator("#customRuleSummary").click();
+  await page.locator("#rulePattern").fill("a".repeat(4097));
+  await page.locator("#saveRule").click();
+  await page.waitForFunction(() => document.getElementById("note").textContent.includes("4096"));
+  assert.equal(await page.evaluate(() => fixture.writes.length), 0);
+  assert.equal(await page.locator(".rule-item").count(), 1);
 });

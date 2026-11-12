@@ -55,7 +55,8 @@
       id: String(raw.id || makeId()).slice(0, 128),
       enabled: raw.enabled !== false,
       type: normalizeType(raw.type),
-      pattern: String(raw.pattern || "").trim().slice(0, MAX_PATTERN_LENGTH),
+      // Preserve invalid input so validation can reject it without changing its meaning.
+      pattern: String(raw.pattern || "").trim(),
       browser: normalizeBrowserScope(raw.browser),
       context: normalizeContextScope(raw.context),
       note: String(raw.note || "").replace(/\s+/g, " ").trim().slice(0, MAX_NOTE_LENGTH),
@@ -153,7 +154,7 @@
 
   function ruleMatches(value, context = {}) {
     const rule = normalizeRule(value);
-    if (!rule.enabled || !rule.pattern) return false;
+    if (!rule.enabled || !rule.pattern || rule.pattern.length > MAX_PATTERN_LENGTH) return false;
 
     const browser = String(context.browser || "").toLowerCase();
     if (rule.browser !== "all" && rule.browser !== browser) return false;

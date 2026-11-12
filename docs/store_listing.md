@@ -1,9 +1,14 @@
-# Chrome Web Store Listing & Store Assets Specification
+# Chrome Web Store listing copy and assets
+
+This file is proposed dashboard copy for the repository implementation. Editing it does not change the live listing. Follow [the release checklist](releasing.md) to submit the package and update the dashboard together.
+
+Public listing: [Cross-Browser Duplicate Tab Guard](https://chromewebstore.google.com/detail/cross-browser-duplicate-ta/dbfkmbhkefkppdbbiifihekopelgcdgb).
 
 ## 1. Extension Details
+
 - **Name**: Cross-Browser Duplicate Tab Guard
 - **Short Name**: Tab Guard
-- **Version**: 2.4.1
+- **Version**: 2.4.2 (prepared update; verify the public listing separately)
 - **Category**: Productivity / Workflow & Planning
 - **Primary Language**: English
 - **Supported Platforms**: Chrome, Brave, Chromium (macOS & Linux)
@@ -13,13 +18,15 @@
 ## 2. Store Copy & Descriptions
 
 ### Short Description (Max 132 Characters)
+
 > Stops exact-URL duplicate tabs across Chrome, Brave and Chromium, with editable exceptions. Needs the free local companion app.
 
 ### Detailed Description (Markdown / Store Formatted)
+
 ```markdown
 Cross-Browser Duplicate Tab Guard coordinates open tab state across Google Chrome, Brave, and Chromium, preventing accidental duplicate tabs across multiple windows and browsers.
 
-When you navigate to an exact URL that is already open in another window or browser, Tab Guard presents a chooser identifying the existing copies (for example, "Already open in Brave"). Choose which browser should retain the single live copy; the other exact-URL copies close after confirmation. Configure URL and domain exceptions separately in the extension popup.
+When you navigate to an exact URL that is already open in another window or browser, Tab Guard presents a chooser identifying the existing copies (for example, "Already open in Brave"). Choose which browser should retain the single live copy; the other exact-URL copies close after confirmation. To keep the current copies open temporarily, pause guarding for 15 minutes, one hour or 24 hours directly from the duplicate alert. The pause applies to that browser profile; use Resume in the toolbar popup to end it early. Configure URL and domain exceptions separately in the extension popup.
 
 KEY FEATURES:
 • Cross-Browser Coordination: Synchronizes tab states across Chrome, Brave, and Chromium via a lightweight local native messaging daemon.
@@ -44,11 +51,15 @@ SETUP:
 | `webNavigation` | Required to detect committed navigations, history-state changes, and fragment changes so exact-URL duplicates can be checked after navigation. |
 | `storage` | Required to store user-configured URL exception rules, whitelist patterns, and pause durations locally on the device. |
 | `alarms` | Required for periodic background service worker heartbeats to maintain connectivity with the local coordinator daemon across sleep/wake transitions. |
+| `<all_urls>` (host permission and content-script matches) | Required to show the in-page duplicate chooser on eligible websites. Content scripts run in the top frame; restricted pages use the fallback chooser. File access remains separately controlled by the browser. |
 | `nativeMessaging` | Required for bidirectional communication with the local coordinator daemon on the host machine to coordinate tab state across browser families. |
 
 ---
 
 ## 4. Privacy & Data Handling Declarations
+
+Keep these declarations consistent with [privacy and data handling](privacy.md). Do not describe private/incognito contexts as isolated from one another: matching tabs can be shown across connected profiles.
+
 - **Single Purpose**: Cross-browser tab deduplication and window navigation.
 - **Data Collection**: Tab URLs, titles, and browser context are processed locally for duplicate detection. They are not sent to remote servers or third parties.
 - **Network Boundaries**: The Web Store extension communicates with the installed native messaging host, which connects to the local coordinator over a Unix domain socket. The published package has no loopback WebSocket fallback. Authenticated loopback WebSocket support belongs only to the installer-rendered unpacked build.
@@ -56,6 +67,7 @@ SETUP:
 ---
 
 ## 5. Graphic Assets Checklist
+
 - [x] **16x16 PNG**: Toolbar / favicon (`extension/icons/icon16.png`)
 - [x] **32x32 PNG**: Windows / high-DPI display icon (`extension/icons/icon32.png`)
 - [x] **48x48 PNG**: Extensions management page (`extension/icons/icon48.png`)

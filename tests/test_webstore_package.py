@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import shutil
 import sys
@@ -31,6 +32,25 @@ class WebStorePackageTests(unittest.TestCase):
 
     def build(self) -> Path:
         return guard.build_webstore_package(self.source, self.output, ["test-loopback-token"])
+
+    def test_standalone_installer_embeds_every_extension_asset_exactly(self) -> None:
+        embedded = {
+            name: content.encode("utf-8")
+            for name, content in guard.EXTENSION_FILES.items()
+        }
+        embedded.update({
+            name: base64.b64decode(content, validate=True)
+            for name, content in guard.EXTENSION_BINARY_FILES.items()
+        })
+        expected = {
+            path.relative_to(EXTENSION_DIR).as_posix(): path.read_bytes()
+            for path in EXTENSION_DIR.rglob("*")
+            if path.is_file() and path.suffix in {".css", ".html", ".js", ".json", ".svg", ".png"}
+        }
+        self.assertEqual(set(embedded), set(expected))
+        for name, content in expected.items():
+            self.assertEqual(embedded[name], content, name)
+        self.assertEqual(json.loads(guard.EXTENSION_FILES["manifest.json"])["version"], guard.APP_VERSION)
 
     def test_actual_zip_is_store_safe_and_matches_source_assets(self) -> None:
         archive_path = self.build()

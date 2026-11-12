@@ -33,10 +33,9 @@
 
   function setBusy(busy) {
     if (!shadow) return;
-    const button = shadow.querySelector("button[data-role='confirm']");
-    const select = shadow.querySelector("select[data-role='choice']");
-    if (button) button.disabled = Boolean(busy);
-    if (select) select.disabled = Boolean(busy);
+    for (const control of shadow.querySelectorAll("button, select")) {
+      control.disabled = Boolean(busy);
+    }
   }
 
   function render(payload) {
@@ -73,7 +72,8 @@
         border-radius: 18px;
         background: #ffffff;
         box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
-        overflow: hidden;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
       }
       .header { padding: 24px 24px 15px; }
       .eyebrow {
@@ -127,6 +127,8 @@
         outline: none;
       }
       select:focus { border-color: #5065e8; box-shadow: 0 0 0 3px rgba(80, 101, 232, 0.15); }
+      .pause-controls { margin-top: 18px; }
+      .pause-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
       .meta { margin-top: 10px; font-size: 12px; color: #697386; }
       .status {
         min-height: 20px;
@@ -368,7 +370,55 @@
     status.dataset.role = "status";
     status.setAttribute("aria-live", "polite");
 
-    body.append(description, url, labelEl, select, meta, status);
+    const pauseControls = document.createElement("div");
+    pauseControls.className = "pause-controls";
+    const pauseLabel = document.createElement("label");
+    pauseLabel.htmlFor = "cbdtg-pause-duration";
+    pauseLabel.textContent = "Pause duplicate handling";
+    const pauseRow = document.createElement("div");
+    pauseRow.className = "pause-row";
+    const pauseDuration = document.createElement("select");
+    pauseDuration.id = "cbdtg-pause-duration";
+    pauseDuration.setAttribute("aria-describedby", "cbdtg-pause-help");
+    for (const [minutes, text] of [[15, "15 minutes"], [60, "1 hour"], [1440, "24 hours"]]) {
+      const option = document.createElement("option");
+      option.value = String(minutes);
+      option.textContent = text;
+      option.selected = minutes === 60;
+      pauseDuration.append(option);
+    }
+    const pause = document.createElement("button");
+    pause.type = "button";
+    pause.dataset.role = "pause";
+    pause.textContent = "Pause";
+    const pauseHelp = document.createElement("p");
+    pauseHelp.id = "cbdtg-pause-help";
+    pauseHelp.className = "meta";
+    pauseHelp.textContent = "Keep these tabs open and pause the guard in this browser profile.";
+    pause.addEventListener("click", async () => {
+      setBusy(true);
+      setStatus("Pausing duplicate handling…");
+      const activeIncident = state;
+      try {
+        if (!activeIncident || !activeIncident.incident_id || String(activeIncident.url || location.href) !== location.href) {
+          throw new Error("This duplicate alert is no longer active.");
+        }
+        const response = await chrome.runtime.sendMessage({
+          type: "pause_duplicate",
+          incident_id: activeIncident.incident_id,
+          minutes: Number(pauseDuration.value),
+        });
+        if (!response || !response.ok) throw new Error((response && response.error) || "The guard could not be paused.");
+        if (state === activeIncident) removeDialog();
+      } catch (error) {
+        if (state !== activeIncident) return;
+        setBusy(false);
+        setStatus(error && error.message ? error.message : String(error), "error");
+      }
+    });
+    pauseRow.append(pauseDuration, pause);
+    pauseControls.append(pauseLabel, pauseRow, pauseHelp);
+    body.append(description, url, labelEl, select, meta, pauseControls, status);
 
     const actions = document.createElement("div");
     actions.className = "actions";
@@ -442,3 +492,4 @@
     }
   });
 })();
+
