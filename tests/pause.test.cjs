@@ -91,7 +91,7 @@ async function dialog(t, kind, options = {}) {
   await page.exposeFunction("workerRequest", (message) => state.request(message));
   await page.route("https://guard-test.example/**", (route) => {
     const name = new URL(route.request().url()).pathname.slice(1);
-    if (name === "article") return route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Article</title><p>Reference page</p>" });
+    if (name === "article") return route.fulfill({ contentType: "text/html", body: `<!doctype html><meta charset="utf-8"><title>Article</title><p>Reference page</p>` });
     const type = name.endsWith(".js") ? "text/javascript" : name.endsWith(".css") ? "text/css" : "text/html";
     return route.fulfill({ contentType: type, body: fs.readFileSync(path.join(extension, name)) });
   });

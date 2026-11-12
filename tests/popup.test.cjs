@@ -400,3 +400,42 @@ test("connection status recovers while popup stays open and preserves success no
   assert.equal(await page.locator("#connection").textContent(), "Connected");
   assert.equal(await page.locator("#note").textContent(), "Exact URL excluded.");
 });
+
+test("oversized imports are rejected without writes and valid imports retain their pattern", async (t) => {
+  for (const mode of ["merge", "replace"]) {
+    await t.test(mode, async (t) => {
+      const page = await popup(t);
+      await page.waitForFunction(() => document.querySelectorAll(".rule-item").length === 1);
+      await page.locator(".transfer-panel > summary").click();
+      await page.locator("#showImport").click();
+      await page.locator("#importMode").selectOption(mode);
+      const invalid = JSON.stringify([{ type: "exact", pattern: "a".repeat(4097) }]);
+      await page.locator("#importText").fill(invalid);
+      await page.locator("#applyImport").click();
+      await page.waitForFunction(() => document.getElementById("note").textContent.includes("4096"));
+      assert.equal(await page.evaluate(() => fixture.writes.length), 0);
+      assert.equal(await page.locator("#importText").inputValue(), invalid);
+      assert.equal(await page.locator(".rule-item").count(), 1);
+
+      const pattern = "https://valid.example.test/path?keep=exact#fragment";
+      await page.locator("#importText").fill(JSON.stringify([{ type: "exact", pattern }]));
+      await page.locator("#applyImport").click();
+      await page.waitForFunction(() => fixture.writes.length === 1);
+      const stored = await page.evaluate(() => fixture.stored.duplicateTabGuardExceptionSettingsV1);
+      assert.equal(stored.rules.length, mode === "merge" ? 2 : 1);
+      assert.equal(stored.rules.at(-1).pattern, pattern);
+      assert.equal(stored.rules.at(-1).type, "exact");
+    });
+  }
+});
+
+test("saving an oversized exception rejects it without writing a truncated rule", async (t) => {
+  const page = await popup(t);
+  await page.waitForFunction(() => document.querySelectorAll(".rule-item").length === 1);
+  await page.locator("#customRuleSummary").click();
+  await page.locator("#rulePattern").fill("a".repeat(4097));
+  await page.locator("#saveRule").click();
+  await page.waitForFunction(() => document.getElementById("note").textContent.includes("4096"));
+  assert.equal(await page.evaluate(() => fixture.writes.length), 0);
+  assert.equal(await page.locator(".rule-item").count(), 1);
+});

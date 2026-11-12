@@ -12,6 +12,11 @@ User-visible changes and compatibility notes are recorded here. Repository chang
 
 ### Fixed
 
+- Cancelled tab transfers can no longer resume and close other copies.
+- Runtime directories enforce ownership and private permissions; malformed configuration reports the expected error.
+- Overlength exception patterns are rejected on entry/import and cannot become truncated matching rules.
+- Duplicate dialog actions remain accessible in short browser windows.
+
 - Removed the generic trailing explanatory text from copied tab details while retaining the tab-specific fields.
 - Removed matching installer-created external-extension registrations during uninstall while preserving externally modified or store-managed records.
 - Restored embedded icons for standalone installs and removed machine-specific development paths.

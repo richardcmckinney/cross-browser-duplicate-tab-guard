@@ -46,7 +46,7 @@ jobs:
 
       - name: Install locked Chromium
         timeout-minutes: 5
-        run: env HOME="$TEST_HOME" ./node_modules/.bin/playwright install --with-deps chromium
+        run: env HOME="$TEST_HOME" ./node_modules/.bin/playwright install --with-deps --only-shell chromium
 
       - name: Run coordinator and popup tests
         timeout-minutes: 3
