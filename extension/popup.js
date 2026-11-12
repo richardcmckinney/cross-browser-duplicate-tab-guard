@@ -424,7 +424,6 @@ function tabReference() {
   ];
   if (guardIdentity.profile_id) lines.push("Guard profile ID: " + guardIdentity.profile_id);
   if (guardIdentity.session_id) lines.push("Guard session ID: " + guardIdentity.session_id + " (extension worker lifetime, not browser session)");
-  lines.push("Tab/window IDs are browser-scoped, not OS window IDs; recheck after browser restart.");
   return lines.join("\n");
 }
 
