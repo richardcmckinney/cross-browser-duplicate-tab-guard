@@ -3,7 +3,7 @@
 // CBDTG_EXCEPTIONS_PATCH_V1
 importScripts("exceptions.js");
 
-const VERSION = "2.4.1";
+const VERSION = "2.4.2";
 const NATIVE_HOST = "systems.venturi.duplicate_tab_guard";
 const FALLBACK_WS_URL = "ws://127.0.0.1:__WS_PORT__/__AUTH_TOKEN__";
 const BROWSERS = new Set(["brave", "chrome", "chromium"]);

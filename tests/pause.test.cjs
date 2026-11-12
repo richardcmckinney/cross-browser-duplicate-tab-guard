@@ -207,6 +207,8 @@ test("pause controls remain reachable in short viewports", async (t) => {
         await page.screenshot({ path: path.join(process.env.PAUSE_SCREENSHOT_DIR, kind + (dark ? "-dark" : "-light") + ".jpg"), type: "jpeg", quality: 70 });
       }
       await pause.click();
+      if (kind === "chooser") await page.locator("#status.success").waitFor();
+      else await page.locator("#__cross_browser_duplicate_tab_guard__").waitFor({ state: "detached" });
       assert.equal(state.stored[settingsKey].pausedUntil, state.clock + 60 * 60000);
     }
   }

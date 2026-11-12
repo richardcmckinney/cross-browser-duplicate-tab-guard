@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from PIL import Image, ImageDraw
 
 def render_master_icon(size=1024):
@@ -98,7 +99,7 @@ def render_master_icon(size=1024):
     return bg_img
 
 def main():
-    target_dir = "/home/ssm-user/cross-browser-duplicate-tab-guard/extension/icons"
+    target_dir = Path(__file__).resolve().parents[1] / "extension" / "icons"
     os.makedirs(target_dir, exist_ok=True)
     
     master = render_master_icon(size=1024)

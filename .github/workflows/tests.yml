@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   tests:
     if: github.repository == 'richardcmckinney/cross-browser-duplicate-tab-guard' && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
