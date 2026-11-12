@@ -82,7 +82,7 @@ function worker(options = {}) {
 
 async function dialog(t, kind, options = {}) {
   const state = worker({ ...options, chooser: kind === "chooser" });
-  const context = await browser.newContext({ viewport: { width: 390, height: 850 }, colorScheme: options.dark ? "dark" : "light" });
+  const context = await browser.newContext({ viewport: { width: 390, height: options.height || 850 }, colorScheme: options.dark ? "dark" : "light" });
   t.after(() => context.close());
   const page = await context.newPage();
   const errors = [];
@@ -192,4 +192,24 @@ test("expiry alarm reconciles existing tabs and pause schedule is restorable", a
   for (const fn of state.events.storage) fn({ [settingsKey]: { newValue: state.stored[settingsKey] } }, "local");
   assert.equal(state.alarms.has("guard-pause-expiry"), false);
 });
+
+test("pause controls remain reachable in short viewports", async (t) => {
+  for (const kind of ["overlay", "chooser"]) {
+    for (const dark of [false, true]) {
+      const { page, pause, state } = await dialog(t, kind, { height: 420, dark });
+      if (kind === "overlay") {
+        const bounds = await page.locator(".dialog").boundingBox();
+        assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= 420, "Dialog stays inside viewport");
+      }
+      await pause.scrollIntoViewIfNeeded();
+      if (process.env.PAUSE_SCREENSHOT_DIR) {
+        fs.mkdirSync(process.env.PAUSE_SCREENSHOT_DIR, { recursive: true });
+        await page.screenshot({ path: path.join(process.env.PAUSE_SCREENSHOT_DIR, kind + (dark ? "-dark" : "-light") + ".jpg"), type: "jpeg", quality: 70 });
+      }
+      await pause.click();
+      assert.equal(state.stored[settingsKey].pausedUntil, state.clock + 60 * 60000);
+    }
+  }
+});
+
 

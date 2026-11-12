@@ -72,7 +72,8 @@
         border-radius: 18px;
         background: #ffffff;
         box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
-        overflow: hidden;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
       }
       .header { padding: 24px 24px 15px; }
       .eyebrow {
