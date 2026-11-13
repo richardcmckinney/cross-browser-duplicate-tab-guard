@@ -13,7 +13,7 @@ alert_failure() {
       --summary 'Extension release blocked' \
       --impact 'A reviewed extension update may not be submitted to the Chrome Web Store' \
       --action 'Inspect the VSH release journal and release receipt; preserve active store reviews' \
-      --evidence "journalctl -u duplicate-tab-guard-release.service; $release_state/artifacts/receipt.json" || true
+      --evidence "journalctl --user -u duplicate-tab-guard-release.service; $release_state/artifacts/receipt.json" || true
   fi
   exit "$result"
 }

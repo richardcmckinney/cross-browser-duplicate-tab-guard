@@ -33,19 +33,27 @@ CWS_GCLOUD_ACCOUNT=your-existing-google-account
 
 The Google account needs permission to impersonate that linked service account. Test authentication under the service's actual `HOME` and `PATH`; do not infer timer access from an interactive shell. For a controlled one-time call, an existing short-lived `CWS_ACCESS_TOKEN` is also accepted. Never commit credentials, print tokens, or create/rotate keys to make a release work. The default Google account is `richard@venturi.systems`; override it explicitly when operating a different account.
 
+The timer runs in the existing VSH user manager, with no root installation or privilege escalation. User lingering must be enabled so scheduling continues after logout; verify `loginctl show-user "$USER" -p Linger` reports `Linger=yes` (already enabled on VSH). The service keeps `NoNewPrivileges=true` and uses the user manager’s home-directory specifier.
+
 After this change is merged and checks pass, install the runner from the immutable merged commit and the reviewed units on **VSH only**:
 
 ```bash
 release_commit=$(git rev-parse origin/main)
-git show "$release_commit:deploy/vsh-release-runner.sh" > /tmp/duplicate-tab-guard-release-runner
-install -Dm755 /tmp/duplicate-tab-guard-release-runner "$HOME/.local/libexec/duplicate-tab-guard-release-runner"
-sudo install -m644 deploy/duplicate-tab-guard-release.service deploy/duplicate-tab-guard-release.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now duplicate-tab-guard-release.timer
-sudo systemctl start duplicate-tab-guard-release.service
+release_stage=$(mktemp -d)
+git show "$release_commit:deploy/vsh-release-runner.sh" > "$release_stage/runner"
+git show "$release_commit:deploy/duplicate-tab-guard-release.service" > "$release_stage/release.service"
+git show "$release_commit:deploy/duplicate-tab-guard-release.timer" > "$release_stage/release.timer"
+install -Dm755 "$release_stage/runner" "$HOME/.local/libexec/duplicate-tab-guard-release-runner"
+install -Dm644 "$release_stage/release.service" "$HOME/.config/systemd/user/duplicate-tab-guard-release.service"
+install -Dm644 "$release_stage/release.timer" "$HOME/.config/systemd/user/duplicate-tab-guard-release.timer"
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+systemctl --user daemon-reload
+systemctl --user enable --now duplicate-tab-guard-release.timer
+systemctl --user start duplicate-tab-guard-release.service
 ```
 
-The runner's source, package, test log, lock and JSON receipts live under `~/.local/state/duplicate-tab-guard-release/`. The installed runner is fixed until deliberately updated; application release code is loaded only from current `main` and revalidated before publishing. Inspect `journalctl -u duplicate-tab-guard-release.service` and `artifacts/receipt.json`. Failures use the standard `venturi-alert` route with all six required flags.
+The runner's source, package, test log, lock and JSON receipts live under `~/.local/state/duplicate-tab-guard-release/`. The installed runner is fixed until deliberately updated; application release code is loaded only from current `main` and revalidated before publishing. Inspect `journalctl --user -u duplicate-tab-guard-release.service` and `artifacts/receipt.json`. Failures use the standard `venturi-alert` route with all six required flags.
 
 A matching active review is left untouched. Another pending version, a staged revision, rejection/cancellation, a policy warning, or a newer published version blocks destructive replacement. The script never cancels a review or requests skipped review. It asks for immediate publication **after approval**, with validation warnings blocking submission. Existing store visibility is retained; verify public access separately. Listing text, privacy declarations and artwork still need to be maintained in the dashboard because these v2 endpoints publish packages, not listing metadata.
 
