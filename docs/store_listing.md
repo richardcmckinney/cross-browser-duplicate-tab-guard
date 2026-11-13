@@ -37,7 +37,7 @@ KEY FEATURES:
 
 SETUP:
 1. Install this extension in your supported browser(s).
-2. Install the free local companion from the project repository. Native messaging must be available in each browser.
+2. Install the free local companion: https://github.com/richardcmckinney/cross-browser-duplicate-tab-guard#installation--setup . Native messaging must be available in each browser.
 3. Confirm the companion connection in the extension popup and configure any exceptions.
 ```
 
@@ -50,7 +50,7 @@ SETUP:
 | `tabs` | Required to query open tab URLs across the browser to detect duplicates and switch focus to an existing tab upon user confirmation. |
 | `webNavigation` | Required to detect committed navigations, history-state changes, and fragment changes so exact-URL duplicates can be checked after navigation. |
 | `storage` | Required to store user-configured URL exception rules, whitelist patterns, and pause durations locally on the device. |
-| `alarms` | Required for periodic background service worker heartbeats to maintain connectivity with the local coordinator daemon across sleep/wake transitions. |
+| `alarms` | Required to resume duplicate detection when a pause expires and for periodic background heartbeats that maintain the local companion connection across sleep/wake transitions. |
 | `<all_urls>` (host permission and content-script matches) | Required to show the in-page duplicate chooser on eligible websites. Content scripts run in the top frame; restricted pages use the fallback chooser. File access remains separately controlled by the browser. |
 | `nativeMessaging` | Required for bidirectional communication with the local coordinator daemon on the host machine to coordinate tab state across browser families. |
 
@@ -72,6 +72,7 @@ Keep these declarations consistent with [privacy and data handling](privacy.md).
 - [x] **32x32 PNG**: Windows / high-DPI display icon (`extension/icons/icon32.png`)
 - [x] **48x48 PNG**: Extensions management page (`extension/icons/icon48.png`)
 - [x] **128x128 PNG**: Chrome Web Store listing & installation icon (`extension/icons/icon128.png`)
-- [x] **SVG Master**: Vector source icon (`extension/icons/icon.svg`)
+- [x] **PNG Master**: User-supplied icon with transparent exterior (`assets/branding/icon-master.png`)
+- [x] **Repository Banner**: User-supplied banner (`assets/branding/banner.jpg`)
 - [ ] **Small Promo Tile**: 440x280 px PNG (for Web Store carousel / category listing)
 - [ ] **Store Screenshots**: 1280x800 px PNG (1–5 screenshots showing in-page modal and popup exception manager)
