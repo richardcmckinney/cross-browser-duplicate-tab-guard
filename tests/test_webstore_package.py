@@ -33,6 +33,19 @@ class WebStorePackageTests(unittest.TestCase):
     def build(self) -> Path:
         return guard.build_webstore_package(self.source, self.output, ["test-loopback-token"])
 
+    def test_optional_permissions_require_the_reviewed_capability_policy(self) -> None:
+        manifest_path = self.source / "manifest.json"
+        original = json.loads(manifest_path.read_text())
+        for optional in (["debugger"], ["nativeMessaging", "debugger"], "tabs", [None]):
+            with self.subTest(optional=optional):
+                manifest = dict(original)
+                manifest["optional_permissions"] = optional
+                manifest_path.write_text(json.dumps(manifest))
+                with self.assertRaises(guard.GuardError):
+                    self.build()
+        manifest_path.write_text(json.dumps(original))
+        self.assertTrue(self.build().is_file())
+
     def test_standalone_installer_embeds_every_extension_asset_exactly(self) -> None:
         embedded = {
             name: content.encode("utf-8")

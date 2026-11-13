@@ -4,7 +4,7 @@
   "private": true,
   "description": "Reproducible development test dependencies for the coordinator and extension popup.",
   "scripts": {
-    "test": "npm run test:coordinator && npm run test:webstore && npm run test:regressions && npm run test:transport && npm run test:popup && npm run test:pause && npm run test:exceptions && npm run test:release",
+    "test": "npm run test:coordinator && npm run test:webstore && npm run test:regressions && npm run test:transport && npm run test:popup && npm run test:pause && npm run test:exceptions && npm run test:release && npm run test:store-proof",
     "test:coordinator": "python3 cross_browser_duplicate_tab_guard.py self-test",
     "test:popup": "node --test tests/popup.test.cjs",
     "test:webstore": "python3 -m unittest discover -s tests -p 'test_webstore_package.py'",
@@ -12,7 +12,8 @@
     "test:regressions": "python3 -m unittest discover -s tests -p 'test_coordinator_regressions.py'",
     "test:pause": "node --test tests/pause.test.cjs",
     "test:exceptions": "node --test tests/exceptions.test.cjs",
-    "test:release": "python3 -m unittest discover -s tests -p 'test_release_extension.py'"
+    "test:release": "python3 -m unittest discover -s tests -p 'test_release*.py'",
+    "test:store-proof": "python3 -m unittest discover -s tests -p 'test_store_payload.py'"
   },
   "devDependencies": {
     "playwright": "1.64.1"

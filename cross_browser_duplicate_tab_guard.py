@@ -2572,6 +2572,11 @@ def webstore_package_problems(
         ]
         if unexpected:
             problems.append(f"unexpected permissions: {sorted(map(str, unexpected))}")
+    optional = manifest.get("optional_permissions", [])
+    if not isinstance(optional, list):
+        problems.append("manifest optional_permissions must be a list")
+    elif any(not isinstance(item, str) or item not in WEBSTORE_PERMISSIONS for item in optional):
+        problems.append("manifest optional_permissions exceeds the pinned capability policy")
     problems.extend(_manifest_optional_shape_problems(manifest))
     background = manifest.get("background", {})
     if not isinstance(background, dict) or not isinstance(
