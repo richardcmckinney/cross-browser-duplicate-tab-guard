@@ -1,0 +1,12 @@
+[Unit]
+Description=Check for reviewed Duplicate Tab Guard releases on VSH
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=10s
+Persistent=true
+Unit=duplicate-tab-guard-release.service
+
+[Install]
+WantedBy=timers.target

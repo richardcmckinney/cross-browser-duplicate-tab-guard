@@ -1,3 +1,5 @@
+[![Cross-Browser Duplicate Tab Guard: prevent duplicate tabs across browsers](assets/branding/banner.jpg)](https://chromewebstore.google.com/detail/dbfkmbhkefkppdbbiifihekopelgcdgb)
+
 # Cross-Browser Duplicate Tab Guard
 
 **Cross-Browser Duplicate Tab Guard** is an open-source, local-first browser extension and background coordinator daemon that detects, prevents, and manages duplicate tabs across multiple browser families (Google Chrome, Brave, and Chromium) on macOS and Linux.
