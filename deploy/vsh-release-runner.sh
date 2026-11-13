@@ -9,11 +9,22 @@ flock -n 9 || exit 0
 alert_failure() {
   result=$?
   if (( result != 0 )); then
-    venturi-alert --id duplicate-tab-guard-release --severity error \
-      --summary 'Extension release blocked' \
-      --impact 'A reviewed extension update may not be submitted to the Chrome Web Store' \
-      --action 'Inspect the VSH release journal and release receipt; preserve active store reviews' \
-      --evidence "journalctl --user -u duplicate-tab-guard-release.service; $release_state/artifacts/receipt.json" || true
+    failure_evidence="$release_state/last-failure.log"
+    {
+      printf 'Unit: duplicate-tab-guard-release.service\n'
+      printf 'Observed UTC: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      printf 'Runner exit status: %s\n' "$result"
+      printf 'Release receipt: %s/artifacts/receipt.json\n' "$release_state"
+      printf 'Inspect: journalctl --user -u duplicate-tab-guard-release.service -n 60 --no-pager\n'
+    } >"$failure_evidence"
+    chmod 600 "$failure_evidence"
+    venturi-alert send --id browser.tabguard.release --severity high \
+      --summary "Extension release runner exited $result" \
+      --plain 'The extension release attempt stopped' \
+      --impact 'The current extension release attempt stopped before completion' \
+      --action 'journalctl --user -u duplicate-tab-guard-release.service -n 60 --no-pager' \
+      --evidence "$failure_evidence" \
+      --source duplicate-tab-guard-release.service || true
   fi
   exit "$result"
 }
