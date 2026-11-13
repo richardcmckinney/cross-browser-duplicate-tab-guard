@@ -291,7 +291,8 @@ class ImmutableSourceData(unittest.TestCase):
     def test_pinned_policy_rejects_unreviewed_optional_capabilities(self):
         files = {p.relative_to(ROOT / "extension").as_posix(): p.read_bytes() for p in (ROOT / "extension").rglob("*") if p.is_file()}
         original = json.loads(files["manifest.json"])
-        for optional in (["debugger"], "tabs", [None]):
+        # Project policy rejects otherwise valid optional capabilities pending review.
+        for optional in (["tabs"], ["nativeMessaging"], ["storage"], ["debugger"], "tabs", [None]):
             manifest = dict(original)
             manifest["optional_permissions"] = optional
             changed = dict(files, **{"manifest.json": json.dumps(manifest).encode()})

@@ -70,6 +70,8 @@ WEBSTORE_DESCRIPTION = (
 WEBSTORE_PERMISSIONS = frozenset(
     {"alarms", "nativeMessaging", "storage", "tabs", "webNavigation"}
 )
+# Project policy: optional capabilities require a separate release-policy review.
+WEBSTORE_OPTIONAL_PERMISSIONS = frozenset()
 WEBSTORE_FILE_SUFFIXES = frozenset({".css", ".html", ".js", ".json", ".png"})
 WEBSTORE_TEXT_SUFFIXES = frozenset({".css", ".html", ".js", ".json"})
 WEBSTORE_IGNORED_NAMES = frozenset(
@@ -2575,7 +2577,7 @@ def webstore_package_problems(
     optional = manifest.get("optional_permissions", [])
     if not isinstance(optional, list):
         problems.append("manifest optional_permissions must be a list")
-    elif any(not isinstance(item, str) or item not in WEBSTORE_PERMISSIONS for item in optional):
+    elif any(not isinstance(item, str) or item not in WEBSTORE_OPTIONAL_PERMISSIONS for item in optional):
         problems.append("manifest optional_permissions exceeds the pinned capability policy")
     problems.extend(_manifest_optional_shape_problems(manifest))
     background = manifest.get("background", {})
@@ -2617,8 +2619,10 @@ def webstore_package_problems(
         if "matches" not in resource_group and "extension_ids" not in resource_group:
             problems.append(f"manifest web_accessible_resources[{index}] needs matches or extension_ids")
         matches = resource_group.get("matches", [])
-        if not isinstance(matches, list) or not matches or any(
-            not isinstance(value, str) for value in matches
+        if "matches" in resource_group and (
+            not isinstance(matches, list) or not matches or any(
+                not isinstance(value, str) for value in matches
+            )
         ):
             problems.append(f"manifest web_accessible_resources[{index}].matches must be a non-empty list")
         extension_ids = resource_group.get("extension_ids", [])

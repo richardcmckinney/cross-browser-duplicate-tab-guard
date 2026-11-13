@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import importlib.util
 import json
 import shutil
 import sys
@@ -36,7 +37,9 @@ class WebStorePackageTests(unittest.TestCase):
     def test_optional_permissions_require_the_reviewed_capability_policy(self) -> None:
         manifest_path = self.source / "manifest.json"
         original = json.loads(manifest_path.read_text())
-        for optional in (["debugger"], ["nativeMessaging", "debugger"], "tabs", [None]):
+        # These named optional permissions can be valid in Chrome. This project
+        # intentionally permits none until its release policy is explicitly reviewed.
+        for optional in (["tabs"], ["nativeMessaging"], ["storage"], ["debugger"], ["nativeMessaging", "debugger"], "tabs", [None]):
             with self.subTest(optional=optional):
                 manifest = dict(original)
                 manifest["optional_permissions"] = optional
@@ -212,6 +215,54 @@ class WebStorePackageTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(result.returncode, 0, f"{name}: {result.stderr}")
+
+    def _pinned_package_bytes(self):
+        spec = importlib.util.spec_from_file_location(
+            "reviewed_pinned_packager", REPO_ROOT / "scripts/release_packager.py"
+        )
+        pinned = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pinned)
+        files = guard._collect_webstore_files(self.source)
+        return pinned.package_bytes(files)[1]
+
+    def test_extension_id_only_web_accessible_resources_build_with_policy_parity(self) -> None:
+        manifest_path = self.source / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["web_accessible_resources"] = [
+            {"resources": ["popup.html"], "extension_ids": ["a" * 32]}
+        ]
+        manifest_path.write_text(json.dumps(manifest))
+        manual = self.build()
+        pinned_bytes = self._pinned_package_bytes()
+        self.assertEqual(manual.read_bytes(), pinned_bytes)
+        with zipfile.ZipFile(manual) as package:
+            group = json.loads(package.read("manifest.json"))["web_accessible_resources"][0]
+            self.assertEqual(group["extension_ids"], ["a" * 32])
+            self.assertNotIn("matches", group)
+
+    def test_web_accessible_resources_reject_invalid_or_missing_selectors(self) -> None:
+        manifest_path = self.source / "manifest.json"
+        original = json.loads(manifest_path.read_text())
+        groups = [
+            {"resources": ["popup.html"]},
+            {"resources": ["popup.html"], "extension_ids": []},
+            {"resources": ["popup.html"], "extension_ids": "a" * 32},
+            {"resources": ["popup.html"], "extension_ids": ["z" * 32]},
+            {"resources": ["popup.html"], "matches": []},
+            {"resources": ["popup.html"], "matches": "https://example.test/*"},
+            {"resources": ["popup.html"], "extension_ids": ["a" * 32], "matches": []},
+            {"extension_ids": ["a" * 32]},
+        ]
+        for group in groups:
+            with self.subTest(group=group):
+                manifest = dict(original)
+                manifest["web_accessible_resources"] = [group]
+                manifest_path.write_text(json.dumps(manifest))
+                with self.assertRaises(guard.GuardError):
+                    self.build()
+                with self.assertRaises(RuntimeError):
+                    self._pinned_package_bytes()
+
 
 
 if __name__ == "__main__":

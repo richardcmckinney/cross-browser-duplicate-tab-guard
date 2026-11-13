@@ -14,7 +14,7 @@ A merge, a prepared ZIP, a GitHub release, a Google review submission, public av
 
 The canonical repository is the personal project `richardcmckinney/cross-browser-duplicate-tab-guard`. Release work runs on VSH.
 
-The timer invokes an installed, reviewed controller bundle. It never imports candidate companion code, checks out candidate worktree files, runs candidate Python/npm commands or installs candidate dependencies. Its packager reads regular Git blobs from the exact current remote `main` commit and treats them as data. It rejects symlinks, gitlinks, unsafe or ambiguous paths, oversized input, embedded-asset/version drift and permissions outside the installed policy, including optional permissions.
+The timer invokes an installed, reviewed controller bundle. It never imports candidate companion code, checks out candidate worktree files, runs candidate Python/npm commands or installs candidate dependencies. Its packager reads regular Git blobs from the exact current remote `main` commit and treats them as data. It rejects symlinks, gitlinks, unsafe or ambiguous paths, oversized input, embedded-asset/version drift and permissions outside the installed policy, including optional permissions. The optional-permission allowlist is intentionally empty under this project's release policy; Chrome's supported optional API is a separate matter.
 
 | Installed component | Responsibility |
 | --- | --- |
