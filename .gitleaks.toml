@@ -35,6 +35,9 @@ regexes = [
   '''^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA[A-Za-z0-9+/=]+$''',
   # A chrome.storage key name, not a credential.
   '''^pending_duplicate_incidents_v[0-9]+$''',
+  # Chromium's public Chrome Web Store publisher-key fingerprint (not an API key).
+  # Source: chromium/components/crx_file/crx_verifier.cc, kPublisherKeyHash.
+  '''^61f7f2a6bfcf74cd0bc1fe2497cc9b04254c658f79f2145392867ea8366367cf$''',
 ]
 
 [[allowlists]]
