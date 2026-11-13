@@ -1,19 +1,14 @@
 [Unit]
-Description=Release reviewed Duplicate Tab Guard main from VSH
-Wants=network-online.target
-After=network-online.target
+Description=Release reviewed Duplicate Tab Guard main from the VSH user manager
 
 [Service]
 Type=oneshot
-User=richardmckinney
-Group=richardmckinney
-Environment=HOME=/home/richardmckinney
-Environment=PATH=/home/richardmckinney/.local/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=/home/richardmckinney/.config/duplicate-tab-guard-release.env
-ExecStart=/home/richardmckinney/.local/libexec/duplicate-tab-guard-release-runner
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=%h/.config/duplicate-tab-guard-release.env
+ExecStart=%h/.local/libexec/duplicate-tab-guard-release-runner
 UMask=0077
 NoNewPrivileges=true
-PrivateTmp=true
 TimeoutStartSec=15min
 StandardOutput=journal
 StandardError=journal
