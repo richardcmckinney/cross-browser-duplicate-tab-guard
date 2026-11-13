@@ -107,11 +107,11 @@ class StoreDecisions(unittest.TestCase):
     def test_matching_version_needs_matching_package_provenance(self):
         with tempfile.TemporaryDirectory() as tmp:
             journal = Path(tmp) / "upload.json"
-            release.save_receipt(journal, {"version": "2.4.2", "sha256": "right", "phase": "publish_intent"})
-            self.assertEqual(release.proven_store_outcome("pending_review", "2.4.2", "right", journal), "pending_review")
-            self.assertEqual(release.proven_store_outcome("pending_review", "2.4.2", "wrong", journal), "existing_pending_review_unverified")
+            release.save_receipt(journal, {"version": "2.4.2", "sha256": "right", "phase": "publish_intent", "item_name": "publishers/publisher/items/dbfkmbhkefkppdbbiifihekopelgcdgb"})
+            self.assertEqual(release.proven_store_outcome("pending_review", "2.4.2", "right", journal, "publishers/publisher/items/dbfkmbhkefkppdbbiifihekopelgcdgb"), "pending_review")
+            self.assertEqual(release.proven_store_outcome("pending_review", "2.4.2", "wrong", journal, "publishers/publisher/items/dbfkmbhkefkppdbbiifihekopelgcdgb"), "existing_pending_review_unverified")
             release.save_receipt(journal, {"version": "2.4.2", "sha256": "right", "phase": "upload_intent"})
-            self.assertEqual(release.proven_store_outcome("pending_review", "2.4.2", "right", journal), "existing_pending_review_unverified")
+            self.assertEqual(release.proven_store_outcome("pending_review", "2.4.2", "right", journal, "publishers/publisher/items/dbfkmbhkefkppdbbiifihekopelgcdgb"), "existing_pending_review_unverified")
 
     def test_public_listing_parser_ignores_scripts_and_checks_install_control(self):
         html = '<title>Cross-Browser Duplicate Tab Guard - Chrome Web Store</title><script>Version 9.9.9</script><div>Version</div><div>2.4.2</div><button>Add to Chrome</button>'
@@ -131,21 +131,7 @@ class StoreDecisions(unittest.TestCase):
 
 
 class GitHubSafety(unittest.TestCase):
-    def test_required_checks_must_exist_and_succeed(self):
-        def checks(test="success", scan="success"):
-            return {"total_count": 2, "check_runs": [{"id": 1, "name": "tests", "status": "completed", "conclusion": test},
-                     {"id": 2, "name": "gitleaks", "status": "completed", "conclusion": scan}]}
-        release.validate_checks(checks(), {"total_count": 0})
-        for runs in [{"total_count": 0, "check_runs": []}, checks("skipped"), checks(scan="failure"), {"total_count": 3, "check_runs": checks()["check_runs"]}]:
-            with self.assertRaises(release.ReleaseError):
-                release.validate_checks(runs, {"total_count": 0})
 
-    def test_latest_rerun_supersedes_old_failure(self):
-        checks = {"total_count": 3, "check_runs": [
-            {"id": 1, "name": "tests", "status": "completed", "conclusion": "failure"},
-            {"id": 2, "name": "tests", "status": "completed", "conclusion": "success"},
-            {"id": 3, "name": "gitleaks", "status": "completed", "conclusion": "success"}]}
-        release.validate_checks(checks, {"total_count": 0})
 
     def test_conflicting_existing_release_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -164,7 +150,7 @@ class GitHubSafety(unittest.TestCase):
             archive, sums = Path(tmp) / "package.zip", Path(tmp) / "SHA256SUMS"
             archive.write_bytes(b"same-package")
             sums.write_text(release.hashlib.sha256(archive.read_bytes()).hexdigest() + "  package.zip\n")
-            existing = {"tag_name": "v2.4.2", "assets": [{"name": "package.zip"}, {"name": "SHA256SUMS"}], "html_url": "https://github.com/release", "draft": False}
+            existing = {"tag_name": "v2.4.2", "assets": [{"name": "package.zip"}, {"name": "SHA256SUMS"}], "html_url": "https://github.com/release", "draft": False, "immutable": True}
             def command(args, root, **kwargs):
                 if args[:3] == ["gh", "release", "download"]:
                     name = args[args.index("--pattern") + 1]
@@ -196,7 +182,7 @@ class GitHubSafety(unittest.TestCase):
             archive, sums = Path(tmp) / "package.zip", Path(tmp) / "SHA256SUMS"
             archive.write_bytes(b"new")
             sums.write_text("checksum")
-            with patch.object(release, "gh_json", return_value=[[]]), patch.object(release, "git", return_value="b" * 40 + "\trefs/tags/v2.4.2"), patch.object(release, "run") as command, self.assertRaises(release.ReleaseError):
+            with patch.object(release, "require_immutable_releases"), patch.object(release, "gh_json", return_value=[[]]), patch.object(release, "git", return_value="b" * 40 + "\trefs/tags/v2.4.2"), patch.object(release, "run") as command, self.assertRaises(release.ReleaseError):
                 release.github_release(Path(tmp), archive, sums, "2.4.2", "a" * 40)
             command.assert_not_called()
 

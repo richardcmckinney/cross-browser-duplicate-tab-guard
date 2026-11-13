@@ -5,6 +5,8 @@ Description=Release reviewed Duplicate Tab Guard main from the VSH user manager
 Type=oneshot
 Environment=HOME=%h
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=GIT_TERMINAL_PROMPT=0
+Environment=GH_PROMPT_DISABLED=1
 EnvironmentFile=%h/.config/duplicate-tab-guard-release.env
 ExecStart=%h/.local/libexec/duplicate-tab-guard-release-runner
 UMask=0077
